@@ -27,18 +27,19 @@
   .toast-container {
     position: fixed;
     top: calc(var(--header-height) + 16px);
-    right: 24px;
+    left: 50%;
+    transform: translate(-50%, -36px) scale(0.95);
     z-index: 999;
-    max-width: 360px;
+    width: calc(100% - 32px);
+    max-width: 420px;
     opacity: 0;
-    transform: translateY(-32px) scale(0.95);
     pointer-events: none;
     transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .toast-container.visible {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate(-50%, 0) scale(1);
     pointer-events: auto;
   }
 
@@ -129,9 +130,7 @@
   @media (max-width: 640px) {
     .toast-container {
       top: calc(var(--header-height) + 12px);
-      right: 16px;
-      left: 16px;
-      max-width: none;
+      width: calc(100% - 24px);
     }
   }
 </style>
