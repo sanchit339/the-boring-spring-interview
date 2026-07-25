@@ -1,0 +1,265 @@
+---
+import { getTotalQuestionCount } from "../data/questions";
+
+const total = getTotalQuestionCount();
+const pathname = Astro.url.pathname;
+---
+
+<header class="header">
+  <div class="header-inner">
+    <div class="header-left">
+      <button
+        type="button"
+        class="mobile-menu-btn btn-ghost"
+        id="mobile-menu-toggle"
+        aria-label="Open navigation"
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <a href="/" class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">Spring Interview</span>
+      </a>
+      <span class="header-divider" aria-hidden="true"></span>
+      <span class="header-meta caption">2 YOE · {total} questions</span>
+    </div>
+
+    <div class="header-center">
+      <div class="search-wrap" id="search-wrap">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M9.5 9.5L12.5 12.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <input
+          type="search"
+          id="global-search"
+          class="search-input"
+          placeholder="Search questions…"
+          autocomplete="off"
+          aria-label="Search questions"
+        />
+        <kbd class="search-kbd">⌘K</kbd>
+        <div class="search-results" id="search-results" hidden></div>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <a href="/" class:list={["nav-link", { active: pathname === "/" }]}>Overview</a>
+      <a href="/core-java" class="btn btn-primary">Start prep</a>
+    </div>
+  </div>
+</header>
+
+<style>
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    height: var(--header-height);
+    background: color-mix(in srgb, var(--color-canvas) 85%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .header-inner {
+    max-width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: 0 var(--space-lg);
+  }
+
+  .header-left,
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-shrink: 0;
+  }
+
+  .header-center {
+    flex: 1;
+    max-width: 420px;
+    min-width: 0;
+  }
+
+  .mobile-menu-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    color: var(--color-ink-muted);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.2px;
+  }
+
+  .brand-mark {
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, #8b95e8 100%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 40%, transparent);
+  }
+
+  .brand-text {
+    color: var(--color-ink);
+  }
+
+  .header-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--color-hairline);
+    margin: 0 4px;
+  }
+
+  .header-meta {
+    color: var(--color-ink-tertiary);
+  }
+
+  .search-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-ink-tertiary);
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    height: 36px;
+    padding: 0 52px 0 34px;
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    color: var(--color-ink);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .search-input::placeholder {
+    color: var(--color-ink-tertiary);
+  }
+
+  .search-input:hover {
+    border-color: var(--color-hairline-strong);
+  }
+
+  .search-input:focus {
+    border-color: var(--color-primary-focus);
+    background: var(--color-surface-2);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-focus) 25%, transparent);
+  }
+
+  .search-kbd {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-ink-tertiary);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    padding: 2px 6px;
+    pointer-events: none;
+  }
+
+  .search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    max-height: 360px;
+    overflow-y: auto;
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-hairline-strong);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    padding: 6px;
+  }
+
+  .search-results :global(.result-item) {
+    display: block;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+  }
+
+  .search-results :global(.result-item:hover),
+  .search-results :global(.result-item.active) {
+    background: var(--color-surface-2);
+  }
+
+  .search-results :global(.result-q) {
+    font-size: 13px;
+    color: var(--color-ink);
+    line-height: 1.4;
+  }
+
+  .search-results :global(.result-meta) {
+    font-size: 11px;
+    color: var(--color-ink-tertiary);
+    margin-top: 2px;
+  }
+
+  .search-results :global(.result-empty) {
+    padding: 16px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--color-ink-subtle);
+  }
+
+  .nav-link {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-ink-subtle);
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+  }
+
+  .nav-link:hover,
+  .nav-link.active {
+    color: var(--color-ink);
+  }
+
+  @media (max-width: 768px) {
+    .mobile-menu-btn {
+      display: inline-flex;
+    }
+    .header-meta,
+    .header-divider,
+    .nav-link {
+      display: none;
+    }
+    .header-inner {
+      padding: 0 var(--space-md);
+    }
+    .search-kbd {
+      display: none;
+    }
+  }
+</style>

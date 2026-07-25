@@ -1,0 +1,225 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+import Header from "../components/Header.astro";
+import Sidebar from "../components/Sidebar.astro";
+import TableOfContents from "../components/TableOfContents.astro";
+import { getAllQuestions } from "../data/questions";
+
+interface TocItem {
+  id: string;
+  label: string;
+  number: number;
+}
+
+interface Props {
+  title: string;
+  description?: string;
+  currentCategory?: string;
+  toc?: TocItem[];
+}
+
+const { title, description, currentCategory, toc = [] } = Astro.props;
+const searchIndex = getAllQuestions().map((q) => ({
+  id: q.id,
+  text: q.text.replace(/`/g, ""),
+  categoryId: q.categoryId,
+  categoryTitle: q.categoryTitle,
+  followUpCount: q.followUps.length,
+}));
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  <div class="docs-shell">
+    <Sidebar currentCategory={currentCategory} />
+    <main class="docs-main">
+      <div class="docs-content">
+        <slot />
+      </div>
+    </main>
+    {toc.length > 0 && <TableOfContents items={toc} />}
+  </div>
+
+  <script
+    type="application/json"
+    id="search-index"
+    set:html={JSON.stringify(searchIndex)}
+  />
+
+  <script>
+    // Mobile sidebar
+    const toggle = document.getElementById("mobile-menu-toggle");
+    const sidebar = document.getElementById("sidebar");
+    const backdrop = document.getElementById("sidebar-backdrop");
+
+    function openSidebar() {
+      sidebar?.classList.add("open");
+      backdrop?.removeAttribute("hidden");
+    }
+    function closeSidebar() {
+      sidebar?.classList.remove("open");
+      backdrop?.setAttribute("hidden", "");
+    }
+
+    toggle?.addEventListener("click", () => {
+      if (sidebar?.classList.contains("open")) closeSidebar();
+      else openSidebar();
+    });
+    backdrop?.addEventListener("click", closeSidebar);
+
+
+    // Search
+    type SearchItem = {
+      id: number;
+      text: string;
+      categoryId: string;
+      categoryTitle: string;
+      followUpCount: number;
+    };
+
+    const indexEl = document.getElementById("search-index");
+    const index: SearchItem[] = indexEl
+      ? JSON.parse(indexEl.textContent || "[]")
+      : [];
+    const input = document.getElementById(
+      "global-search"
+    ) as HTMLInputElement | null;
+    const results = document.getElementById("search-results");
+
+    function stripHtml(s: string) {
+      return s.replace(/<[^>]+>/g, "");
+    }
+
+    function renderResults(items: SearchItem[], query: string) {
+      if (!results) return;
+      if (!query.trim()) {
+        results.hidden = true;
+        results.innerHTML = "";
+        return;
+      }
+      if (items.length === 0) {
+        results.hidden = false;
+        results.innerHTML = `<div class="result-empty">No questions match “${query}”</div>`;
+        return;
+      }
+      results.hidden = false;
+      results.innerHTML = items
+        .slice(0, 12)
+        .map(
+          (item) => `
+        <a class="result-item" href="/${item.categoryId}#q-${item.id}">
+          <div class="result-q">${escapeHtml(item.text)}</div>
+          <div class="result-meta">${escapeHtml(item.categoryTitle)} · Q${item.id}${item.followUpCount ? ` · ${item.followUpCount} follow-ups` : ""}</div>
+        </a>`
+        )
+        .join("");
+    }
+
+    function escapeHtml(s: string) {
+      return s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function search(query: string) {
+      const q = query.toLowerCase().trim();
+      if (!q) return [];
+      return index
+        .filter(
+          (item) =>
+            item.text.toLowerCase().includes(q) ||
+            item.categoryTitle.toLowerCase().includes(q) ||
+            String(item.id) === q
+        )
+        .sort((a, b) => {
+          const aStarts = a.text.toLowerCase().startsWith(q) ? 0 : 1;
+          const bStarts = b.text.toLowerCase().startsWith(q) ? 0 : 1;
+          return aStarts - bStarts;
+        });
+    }
+
+    input?.addEventListener("input", () => {
+      renderResults(search(input.value), input.value);
+    });
+
+    input?.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        input.blur();
+        if (results) {
+          results.hidden = true;
+          results.innerHTML = "";
+        }
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        input?.focus();
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      const wrap = document.getElementById("search-wrap");
+      if (wrap && !wrap.contains(e.target as Node) && results) {
+        results.hidden = true;
+      }
+    });
+
+    // TOC active state on scroll
+    const tocLinks = document.querySelectorAll<HTMLAnchorElement>("[data-toc]");
+    if (tocLinks.length && "IntersectionObserver" in window) {
+      const map = new Map<string, HTMLAnchorElement>();
+      tocLinks.forEach((link) => {
+        const id = link.dataset.toc;
+        if (id) map.set(id, link);
+      });
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            const id = entry.target.id.replace(/^q-/, "");
+            tocLinks.forEach((l) => l.classList.remove("active"));
+            map.get(id)?.classList.add("active");
+          });
+        },
+        { rootMargin: "-20% 0px -70% 0px", threshold: 0 }
+      );
+
+      document.querySelectorAll("article.question").forEach((el) => {
+        observer.observe(el);
+      });
+    }
+  </script>
+</BaseLayout>
+
+<style>
+  .docs-shell {
+    display: flex;
+    align-items: flex-start;
+    max-width: 100%;
+    min-height: calc(100vh - var(--header-height));
+  }
+
+  .docs-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    justify-content: center;
+  }
+
+  .docs-content {
+    width: 100%;
+    max-width: calc(var(--content-max) + 64px);
+    padding: var(--space-xxl) var(--space-xl) var(--space-section);
+  }
+
+  @media (max-width: 768px) {
+    .docs-content {
+      padding: var(--space-xl) var(--space-md) var(--space-xxl);
+    }
+  }
+</style>

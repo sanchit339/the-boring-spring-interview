@@ -1,0 +1,534 @@
+---
+import type { Question } from "../data/types";
+
+interface Props {
+  question: Question;
+  categoryId: string;
+}
+
+const { question } = Astro.props;
+const hasFollowUps = question.followUps.length > 0;
+const hasAnswer = !!(question.answer || question.explanation);
+
+/** Render inline `code` spans from markdown-ish backticks */
+function renderText(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+/**
+ * Render a richer content block that supports:
+ * - fenced code blocks (```lang ... ```)
+ * - **bold**
+ * - inline `code`
+ * - line breaks
+ */
+function renderContent(text: string): string {
+  // Escape HTML first
+  let out = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Fenced code blocks ```lang\n...\n```
+  out = out.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    const langAttr = lang ? ` class="language-${lang}"` : "";
+    return `<pre><code${langAttr}>${code.trimEnd()}</code></pre>`;
+  });
+
+  // **bold**
+  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+
+  // inline `code` — only outside pre blocks
+  out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+
+  // Paragraph breaks (double newline) — but not inside pre blocks
+  // Split on <pre>...</pre> to protect them
+  const parts = out.split(/(<pre>[\s\S]*?<\/pre>)/g);
+  out = parts
+    .map((part) => {
+      if (part.startsWith("<pre>")) return part;
+      // Convert double newlines to paragraph breaks
+      return part
+        .split(/\n\n+/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+        .join("");
+    })
+    .join("");
+
+  return out;
+}
+---
+
+<article class="question" id={`q-${question.id}`}>
+  <div class="question-header">
+    <span class="question-num mono">{String(question.id).padStart(3, "0")}</span>
+    <h2 class="question-title" set:html={renderText(question.text)} />
+  </div>
+
+  {
+    hasAnswer && (
+      <div class="answer-section">
+        <button
+          type="button"
+          class="answer-toggle"
+          aria-expanded="false"
+          data-answer-toggle
+        >
+          <span class="toggle-icon answer-icon" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M7 5v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <circle cx="7" cy="9.5" r="0.6" fill="currentColor"/>
+            </svg>
+          </span>
+          <span class="toggle-label">See Answer &amp; Explanation</span>
+          <span class="chevron" aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M4.5 2.5L8 6L4.5 9.5"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+        </button>
+
+        <div class="answer-panel" hidden data-answer-panel>
+          {question.answer && (
+            <div class="answer-block">
+              <span class="block-label">Expected Answer</span>
+              <div class="answer-text" set:html={renderContent(question.answer)} />
+            </div>
+          )}
+          {question.explanation && (
+            <div class="explanation-block">
+              <span class="block-label">Practical Explanation</span>
+              <div class="explanation-text" set:html={renderContent(question.explanation)} />
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  {
+    hasFollowUps && (
+      <div class="followups">
+        <button
+          type="button"
+          class="followups-toggle"
+          aria-expanded="false"
+          data-followup-toggle
+        >
+          <span class="toggle-icon" aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M4.5 2.5L8 6L4.5 9.5"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+          <span class="toggle-label">
+            {question.followUps.length} follow-up
+            {question.followUps.length === 1 ? "" : "s"}
+          </span>
+          <span class="badge badge-primary">Ask next</span>
+        </button>
+
+        <div class="followups-panel" hidden data-followup-panel>
+          <ol class="followups-list">
+            {question.followUps.map((fu, i) => (
+              <li class="followup-item">
+                <span class="followup-marker" aria-hidden="true">
+                  {i + 1}
+                </span>
+                <span
+                  class="followup-text"
+                  set:html={renderText(fu.text)}
+                />
+              </li>
+            ))}
+          </ol>
+          <p class="followup-hint caption">
+            Use these to go deeper after the candidate answers the main
+            question.
+          </p>
+        </div>
+      </div>
+    )
+  }
+</article>
+
+<style>
+  .question {
+    scroll-margin-top: calc(var(--header-height) + 24px);
+    padding: var(--space-lg) 0;
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .question:last-child {
+    border-bottom: none;
+  }
+
+  .question-header {
+    display: flex;
+    gap: var(--space-md);
+    align-items: flex-start;
+  }
+
+  .question-num {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-primary-hover);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    margin-top: 2px;
+    letter-spacing: 0;
+  }
+
+  .question-title {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.5;
+    letter-spacing: -0.1px;
+    color: var(--color-ink);
+  }
+
+  .question-title :global(code) {
+    font-size: 0.9em;
+  }
+
+  /* ── Answer Section ── */
+  .answer-section {
+    margin-top: var(--space-md);
+    margin-left: calc(12px + 8px + 16px + 16px);
+  }
+
+  .answer-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
+    color: var(--color-primary-hover);
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.12s ease, border-color 0.12s ease;
+    cursor: pointer;
+  }
+
+  .answer-toggle:hover {
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+  }
+
+  .answer-toggle[aria-expanded="true"] {
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+  }
+
+  .answer-toggle[aria-expanded="true"] .chevron {
+    transform: rotate(90deg);
+  }
+
+  .answer-icon {
+    display: flex;
+    color: var(--color-primary-hover);
+  }
+
+  .chevron {
+    display: flex;
+    transition: transform 0.15s ease;
+    color: var(--color-primary-hover);
+    opacity: 0.7;
+  }
+
+  .answer-panel {
+    margin-top: var(--space-sm);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface-1));
+    overflow: hidden;
+  }
+
+  .block-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-primary-hover);
+    margin-bottom: var(--space-sm);
+    opacity: 0.8;
+  }
+
+  .answer-block {
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent);
+  }
+
+  .answer-text {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--color-ink);
+  }
+
+  .answer-text :global(p) {
+    margin: 0 0 var(--space-sm) 0;
+  }
+
+  .answer-text :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .answer-text :global(code) {
+    font-size: 0.88em;
+  }
+
+  .answer-text :global(strong) {
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  .explanation-block {
+    padding: var(--space-md) var(--space-lg);
+  }
+
+  .explanation-text {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--color-ink-muted);
+  }
+
+  .explanation-text :global(p) {
+    margin: 0 0 var(--space-sm) 0;
+  }
+
+  .explanation-text :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .explanation-text :global(strong) {
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  .explanation-text :global(code) {
+    font-size: 0.88em;
+  }
+
+  .explanation-text :global(pre) {
+    margin: var(--space-sm) 0;
+    padding: var(--space-md);
+    background: var(--color-surface-0, #0d1117);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+  }
+
+  .explanation-text :global(pre code) {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--color-ink);
+    background: none;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .answer-text :global(pre) {
+    margin: var(--space-sm) 0;
+    padding: var(--space-md);
+    background: var(--color-surface-0, #0d1117);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    overflow-x: auto;
+  }
+
+  .answer-text :global(pre code) {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--color-ink);
+    background: none;
+    border: none;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  /* ── Follow-ups ── */
+  .followups {
+    margin-top: var(--space-md);
+    margin-left: calc(12px + 8px + 16px + 16px); /* align under title */
+  }
+
+  .followups-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-hairline);
+    color: var(--color-ink-muted);
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+    cursor: pointer;
+  }
+
+  .followups-toggle:hover {
+    background: var(--color-surface-2);
+    border-color: var(--color-hairline-strong);
+    color: var(--color-ink);
+  }
+
+  .followups-toggle[aria-expanded="true"] {
+    background: var(--color-surface-2);
+    border-color: var(--color-hairline-strong);
+    color: var(--color-ink);
+  }
+
+  .followups-toggle[aria-expanded="true"] .toggle-icon {
+    transform: rotate(90deg);
+  }
+
+  .toggle-icon {
+    display: flex;
+    transition: transform 0.15s ease;
+    color: var(--color-ink-subtle);
+  }
+
+  .toggle-label {
+    color: inherit;
+  }
+
+  .followups-panel {
+    margin-top: var(--space-sm);
+    padding: var(--space-md);
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-lg);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .followups-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .followup-item {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: flex-start;
+  }
+
+  .followup-marker {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--color-ink-subtle);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xs);
+    margin-top: 1px;
+  }
+
+  .followup-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-ink-muted);
+  }
+
+  .followup-text :global(code) {
+    font-size: 0.9em;
+  }
+
+  .followup-hint {
+    margin-top: var(--space-md);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--color-hairline);
+    color: var(--color-ink-tertiary);
+  }
+
+  @media (max-width: 640px) {
+    .followups,
+    .answer-section {
+      margin-left: 0;
+    }
+    .question-header {
+      flex-direction: column;
+      gap: var(--space-xs);
+    }
+  }
+</style>
+
+<script>
+  // Event delegation for all toggles and global expand/collapse
+  document.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+
+    // Follow-up accordion toggle
+    const followupBtn = target.closest("[data-followup-toggle]") as HTMLButtonElement | null;
+    if (followupBtn) {
+      const expanded = followupBtn.getAttribute("aria-expanded") === "true";
+      const panel = followupBtn.nextElementSibling as HTMLElement | null;
+      followupBtn.setAttribute("aria-expanded", String(!expanded));
+      if (panel) panel.hidden = expanded;
+      return;
+    }
+
+    // Answer & explanation accordion toggle
+    const answerBtn = target.closest("[data-answer-toggle]") as HTMLButtonElement | null;
+    if (answerBtn) {
+      const expanded = answerBtn.getAttribute("aria-expanded") === "true";
+      const panel = answerBtn.nextElementSibling as HTMLElement | null;
+      answerBtn.setAttribute("aria-expanded", String(!expanded));
+      if (panel) panel.hidden = expanded;
+      return;
+    }
+
+    // Expand all follow-ups
+    if (target.closest("#expand-all-followups")) {
+      document.querySelectorAll("[data-followup-toggle]").forEach((btn) => {
+        btn.setAttribute("aria-expanded", "true");
+        const panel = btn.nextElementSibling as HTMLElement | null;
+        if (panel) panel.hidden = false;
+      });
+      return;
+    }
+
+    // Collapse all follow-ups
+    if (target.closest("#collapse-all-followups")) {
+      document.querySelectorAll("[data-followup-toggle]").forEach((btn) => {
+        btn.setAttribute("aria-expanded", "false");
+        const panel = btn.nextElementSibling as HTMLElement | null;
+        if (panel) panel.hidden = true;
+      });
+      return;
+    }
+  });
+</script>

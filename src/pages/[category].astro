@@ -1,0 +1,232 @@
+---
+import DocsLayout from "../layouts/DocsLayout.astro";
+import QuestionCard from "../components/QuestionCard.astro";
+import {
+  categories,
+  getCategoryById,
+  getAdjacentCategories,
+} from "../data/questions";
+
+export function getStaticPaths() {
+  return categories.map((cat) => ({
+    params: { category: cat.id },
+  }));
+}
+
+const { category: categoryId } = Astro.params;
+const category = getCategoryById(categoryId!);
+
+if (!category) {
+  return Astro.redirect("/");
+}
+
+const { prev, next } = getAdjacentCategories(category.id);
+const followUpTotal = category.questions.reduce(
+  (n, q) => n + q.followUps.length,
+  0
+);
+
+const toc = category.questions.map((q) => ({
+  id: String(q.id),
+  number: q.id,
+  label: q.text.replace(/`/g, "").slice(0, 72),
+}));
+---
+
+<DocsLayout
+  title={category.title}
+  description={category.description}
+  currentCategory={category.id}
+  toc={toc}
+>
+  <div class="page-header">
+    <nav class="breadcrumb body-sm" aria-label="Breadcrumb">
+      <a href="/">Overview</a>
+      <span class="crumb-sep" aria-hidden="true">/</span>
+      <span class="crumb-current">{category.title}</span>
+    </nav>
+
+    <div class="title-row">
+      <span class="cat-icon" aria-hidden="true">{category.icon}</span>
+      <div>
+        <h1 class="display-sm">{category.title}</h1>
+        <p class="subhead page-desc">{category.description}</p>
+      </div>
+    </div>
+
+    <div class="page-meta">
+      <span class="badge badge-primary"
+        >{category.questions.length} questions</span
+      >
+      <span class="badge">{followUpTotal} follow-ups</span>
+      <div class="meta-actions">
+        <button type="button" class="btn btn-ghost" id="expand-all-followups">
+          Expand follow-ups
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          id="collapse-all-followups"
+        >
+          Collapse
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="questions">
+    {
+      category.questions.map((q) => (
+        <QuestionCard question={q} categoryId={category.id} />
+      ))
+    }
+  </div>
+
+  <nav class="pager" aria-label="Topic navigation">
+    {
+      prev ? (
+        <a href={`/${prev.id}`} class="pager-link prev card">
+          <span class="caption">Previous</span>
+          <span class="pager-title">
+            {prev.icon} {prev.title}
+          </span>
+        </a>
+      ) : (
+        <span class="pager-link placeholder" />
+      )
+    }
+    {
+      next ? (
+        <a href={`/${next.id}`} class="pager-link next card">
+          <span class="caption">Next</span>
+          <span class="pager-title">
+            {next.icon} {next.title}
+          </span>
+        </a>
+      ) : (
+        <span class="pager-link placeholder" />
+      )
+    }
+  </nav>
+</DocsLayout>
+
+<style>
+  .page-header {
+    margin-bottom: var(--space-xl);
+    padding-bottom: var(--space-xl);
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: var(--space-lg);
+    color: var(--color-ink-tertiary);
+  }
+
+  .breadcrumb a {
+    color: var(--color-ink-subtle);
+  }
+
+  .breadcrumb a:hover {
+    color: var(--color-primary-hover);
+  }
+
+  .crumb-sep {
+    color: var(--color-ink-tertiary);
+  }
+
+  .crumb-current {
+    color: var(--color-ink-muted);
+  }
+
+  .title-row {
+    display: flex;
+    gap: var(--space-md);
+    align-items: flex-start;
+    margin-bottom: var(--space-lg);
+  }
+
+  .cat-icon {
+    font-size: 28px;
+    line-height: 1.2;
+    flex-shrink: 0;
+  }
+
+  .page-desc {
+    margin-top: var(--space-sm);
+    font-size: 16px;
+    max-width: 560px;
+  }
+
+  .page-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .meta-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+  }
+
+  .questions {
+    margin-bottom: var(--space-xxl);
+  }
+
+  .pager {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
+    padding-top: var(--space-xl);
+    border-top: 1px solid var(--color-hairline);
+  }
+
+  .pager-link {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--space-md) var(--space-lg);
+    text-decoration: none;
+    min-height: 72px;
+  }
+
+  .pager-link.placeholder {
+    visibility: hidden;
+    pointer-events: none;
+    border: none;
+    background: transparent;
+  }
+
+  .pager-link.next {
+    text-align: right;
+    align-items: flex-end;
+  }
+
+  .pager-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+
+  .pager-link:hover .pager-title {
+    color: var(--color-primary-hover);
+  }
+
+  @media (max-width: 640px) {
+    .meta-actions {
+      margin-left: 0;
+      width: 100%;
+    }
+    .pager {
+      grid-template-columns: 1fr;
+    }
+    .pager-link.next {
+      text-align: left;
+      align-items: flex-start;
+    }
+  }
+</style>

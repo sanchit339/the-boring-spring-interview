@@ -1,0 +1,285 @@
+---
+import DocsLayout from "../layouts/DocsLayout.astro";
+import {
+  categories,
+  getTotalQuestionCount,
+  getTotalFollowUpCount,
+} from "../data/questions";
+
+const totalQ = getTotalQuestionCount();
+const totalFU = getTotalFollowUpCount();
+---
+
+<DocsLayout
+  title="Home"
+  description="Java Spring Boot interview questions for ~2 years experience — organized Mintlify-style with follow-ups."
+>
+  <div class="hero">
+    <p class="eyebrow">Interview prep · 2 years experience</p>
+    <h1 class="display-md">Java Spring Boot<br />Interview Questions</h1>
+    <p class="subhead hero-lead">
+      {totalQ} core questions across {categories.length} topics, plus {totalFU}{" "}
+      interviewer follow-ups — organized like Mintlify docs, styled with Linear’s
+      dark canvas.
+    </p>
+    <div class="hero-actions">
+      <a href="/core-java" class="btn btn-primary">Start with Core Java</a>
+      <a href="/spring-boot" class="btn btn-secondary">Jump to Spring Boot</a>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat card">
+      <span class="stat-value">{totalQ}</span>
+      <span class="stat-label caption">Questions</span>
+    </div>
+    <div class="stat card">
+      <span class="stat-value">{totalFU}</span>
+      <span class="stat-label caption">Follow-ups</span>
+    </div>
+    <div class="stat card">
+      <span class="stat-value">{categories.length}</span>
+      <span class="stat-label caption">Topics</span>
+    </div>
+  </div>
+
+  <section class="section">
+    <div class="section-head">
+      <h2 class="display-sm">Browse by topic</h2>
+      <p class="body-sm section-desc">
+        Same organization as the source list — expand follow-ups on any question
+        when you want to probe deeper.
+      </p>
+    </div>
+
+    <div class="topic-grid">
+      {
+        categories.map((cat) => (
+          <a href={`/${cat.id}`} class="topic-card card">
+            <div class="topic-top">
+              <span class="topic-icon" aria-hidden="true">
+                {cat.icon}
+              </span>
+              <span class="badge">
+                {cat.questions.length} Q ·{" "}
+                {cat.questions.reduce((n, q) => n + q.followUps.length, 0)} FU
+              </span>
+            </div>
+            <h3 class="headline topic-title">{cat.title}</h3>
+            <p class="body-sm topic-desc">{cat.description}</p>
+            <span class="topic-cta caption">
+              Open topic
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="section how">
+    <div class="card how-card">
+      <p class="eyebrow">How to use</p>
+      <h2 class="headline">Interview like a pro</h2>
+      <ol class="how-list">
+        <li>
+          <strong>Ask the main question</strong> — let the candidate answer fully
+          before interrupting.
+        </li>
+        <li>
+          <strong>Open follow-ups</strong> — each card has 2–3 depth probes for
+          gaps, edge cases, and real-world trade-offs.
+        </li>
+        <li>
+          <strong>Search or jump topics</strong> — use ⌘K / Ctrl+K or the sidebar
+          to navigate like Mintlify docs.
+        </li>
+      </ol>
+    </div>
+  </section>
+</DocsLayout>
+
+<style>
+  .hero {
+    margin-bottom: var(--space-xxl);
+  }
+
+  .hero .eyebrow {
+    margin-bottom: var(--space-md);
+  }
+
+  .hero h1 {
+    margin-bottom: var(--space-lg);
+  }
+
+  .hero-lead {
+    max-width: 540px;
+    margin-bottom: var(--space-xl);
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-md);
+    margin-bottom: var(--space-section);
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: var(--space-lg);
+  }
+
+  .stat:hover {
+    background: var(--color-surface-1);
+  }
+
+  .stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.6px;
+    color: var(--color-ink);
+  }
+
+  .stat-label {
+    color: var(--color-ink-subtle);
+  }
+
+  .section {
+    margin-bottom: var(--space-section);
+  }
+
+  .section-head {
+    margin-bottom: var(--space-xl);
+  }
+
+  .section-head h2 {
+    margin-bottom: var(--space-sm);
+  }
+
+  .section-desc {
+    color: var(--color-ink-subtle);
+    max-width: 480px;
+  }
+
+  .topic-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-md);
+  }
+
+  .topic-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    transition: background 0.15s ease, border-color 0.15s ease,
+      transform 0.15s ease;
+    text-decoration: none;
+  }
+
+  .topic-card:hover {
+    transform: translateY(-1px);
+  }
+
+  .topic-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+  }
+
+  .topic-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .topic-title {
+    font-size: 18px;
+    letter-spacing: -0.3px;
+  }
+
+  .topic-desc {
+    color: var(--color-ink-subtle);
+    flex: 1;
+  }
+
+  .topic-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-primary-hover);
+    margin-top: var(--space-xs);
+    font-weight: 500;
+  }
+
+  .how-card {
+    padding: var(--space-xl);
+  }
+
+  .how-card .eyebrow {
+    margin-bottom: var(--space-sm);
+  }
+
+  .how-card .headline {
+    margin-bottom: var(--space-lg);
+  }
+
+  .how-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    counter-reset: how;
+  }
+
+  .how-list li {
+    position: relative;
+    padding-left: 36px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--color-ink-muted);
+    counter-increment: how;
+  }
+
+  .how-list li::before {
+    content: counter(how);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    color: var(--color-primary-hover);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+    border-radius: var(--radius-sm);
+  }
+
+  .how-list strong {
+    color: var(--color-ink);
+    font-weight: 500;
+  }
+
+  @media (max-width: 640px) {
+    .stats {
+      grid-template-columns: 1fr;
+    }
+    .topic-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
