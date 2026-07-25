@@ -5,16 +5,23 @@ import Toast from "../components/Toast.astro";
 interface Props {
   title: string;
   description?: string;
+  image?: string;
 }
 
 const {
   title,
-  description = "Java Spring Boot interview questions for ~2 years experience — organized with follow-ups.",
+  description = "The Boring Spring Interview — 158 battle-tested Java & Spring Boot questions, real-world answers, analogies, and production code snippets for 2+ YoE devs.",
+  image = "/og-image.jpg",
 } = Astro.props;
+
 const fullTitle =
-  title === "Home"
-    ? "Spring Boot Interview Prep"
-    : `${title} · Spring Boot Interview Prep`;
+  title === "Home" || title === "Overview"
+    ? "The Boring Spring Interview — Java & Spring Boot Handbook"
+    : `${title} · The Boring Spring Interview`;
+
+const siteUrl = Astro.site || "https://the-boring-spring-interview.vercel.app";
+const canonicalURL = new URL(Astro.url.pathname, siteUrl);
+const imageURL = new URL(image, siteUrl).href;
 ---
 
 <!doctype html>
@@ -22,8 +29,30 @@ const fullTitle =
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <meta name="generator" content={Astro.generator} />
+    <link rel="canonical" href={canonicalURL} />
+
+    <!-- Open Graph / Facebook / LinkedIn / WhatsApp / iMessage -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:site_name" content="The Boring Spring Interview" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={imageURL} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="675" />
+    <meta property="og:image:alt" content="The Boring Spring Interview — Ace Java & Spring Boot Interviews" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content={canonicalURL} />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageURL} />
+    <meta name="twitter:image:alt" content="The Boring Spring Interview — Ace Java & Spring Boot Interviews" />
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -31,7 +60,6 @@ const fullTitle =
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <title>{fullTitle}</title>
   </head>
   <body>
     <slot />
