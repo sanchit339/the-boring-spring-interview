@@ -1,5 +1,6 @@
 ---
 import type { Question } from "../data/types";
+import { codeToHtml } from "shiki";
 
 interface Props {
   question: Question;
@@ -20,39 +21,64 @@ function renderText(text: string): string {
 }
 
 /**
- * Render a richer content block that supports:
- * - fenced code blocks (```lang ... ```)
- * - **bold**
- * - inline `code`
- * - line breaks
+ * Render content with Shiki-powered VS Code syntax highlighting.
+ * Supports fenced code blocks, **bold**, inline `code`, paragraphs.
  */
-function renderContent(text: string): string {
-  // Escape HTML first
-  let out = text
+async function renderContent(text: string): Promise<string> {
+  // Step 1: Extract and replace fenced code blocks with shiki HTML
+  const codeBlockPlaceholders: string[] = [];
+
+  // Match ```lang\n...\n``` blocks
+  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+  const withPlaceholders = text.replace(codeBlockRegex, (_, lang, code) => {
+    codeBlockPlaceholders.push({ lang: lang || "text", code: code.trimEnd() } as any);
+    return `\x00CODEBLOCK_${codeBlockPlaceholders.length - 1}\x00`;
+  });
+
+  // Step 2: Escape HTML in non-code text
+  let out = withPlaceholders
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Fenced code blocks ```lang\n...\n```
-  out = out.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    const langAttr = lang ? ` class="language-${lang}"` : "";
-    return `<pre><code${langAttr}>${code.trimEnd()}</code></pre>`;
-  });
+  // Step 3: Restore shiki-highlighted code blocks
+  for (let i = 0; i < codeBlockPlaceholders.length; i++) {
+    const { lang, code } = codeBlockPlaceholders[i] as any;
+    const supportedLangs = ["java", "xml", "yaml", "properties", "bash", "sh", "json", "sql", "groovy", "kotlin"];
+    const resolvedLang = supportedLangs.includes(lang) ? lang : "text";
 
-  // **bold**
+    const highlighted = await codeToHtml(code, {
+      lang: resolvedLang,
+      theme: "dark-plus",
+    });
+
+    // Wrap shiki output with our code-block container class
+    const wrapped = highlighted.replace(
+      /^<pre /,
+      '<pre class="shiki-block" '
+    );
+
+    out = out.replace(`\x00CODEBLOCK_${i}\x00`, wrapped);
+  }
+
+  // Step 4: **bold**
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 
-  // inline `code` — only outside pre blocks
-  out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>");
-
-  // Paragraph breaks (double newline) — but not inside pre blocks
-  // Split on <pre>...</pre> to protect them
-  const parts = out.split(/(<pre>[\s\S]*?<\/pre>)/g);
+  // Step 5: inline `code` — only in non-pre sections
+  const parts = out.split(/(<pre[\s\S]*?<\/pre>)/g);
   out = parts
     .map((part) => {
-      if (part.startsWith("<pre>")) return part;
-      // Convert double newlines to paragraph breaks
-      return part
+      if (part.startsWith("<pre")) return part;
+      return part.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    })
+    .join("");
+
+  // Step 6: Paragraph breaks — skip pre blocks
+  const segments = out.split(/(<pre[\s\S]*?<\/pre>)/g);
+  out = segments
+    .map((seg) => {
+      if (seg.startsWith("<pre")) return seg;
+      return seg
         .split(/\n\n+/)
         .map((p) => p.trim())
         .filter(Boolean)
@@ -63,6 +89,10 @@ function renderContent(text: string): string {
 
   return out;
 }
+
+// Pre-render content at build time
+const renderedAnswer = question.answer ? await renderContent(question.answer) : "";
+const renderedExplanation = question.explanation ? await renderContent(question.explanation) : "";
 ---
 
 <article class="question" id={`q-${question.id}`}>
@@ -102,16 +132,16 @@ function renderContent(text: string): string {
         </button>
 
         <div class="answer-panel" hidden data-answer-panel>
-          {question.answer && (
+          {renderedAnswer && (
             <div class="answer-block">
               <span class="block-label">Expected Answer</span>
-              <div class="answer-text" set:html={renderContent(question.answer)} />
+              <div class="answer-text" set:html={renderedAnswer} />
             </div>
           )}
-          {question.explanation && (
+          {renderedExplanation && (
             <div class="explanation-block">
               <span class="block-label">Practical Explanation</span>
-              <div class="explanation-text" set:html={renderContent(question.explanation)} />
+              <div class="explanation-text" set:html={renderedExplanation} />
             </div>
           )}
         </div>
@@ -333,42 +363,39 @@ function renderContent(text: string): string {
     font-size: 0.88em;
   }
 
-  .explanation-text :global(pre) {
+  /* ── Shiki VS Code code blocks ── */
+  .explanation-text :global(pre.shiki-block),
+  .answer-text :global(pre.shiki-block) {
     margin: var(--space-sm) 0;
-    padding: var(--space-md);
-    background: var(--color-surface-0, #0d1117);
-    border: 1px solid var(--color-hairline);
+    padding: var(--space-md) var(--space-lg);
     border-radius: var(--radius-md);
+    border: 1px solid #333;
     overflow-x: auto;
+    /* Shiki inlines background — we respect it */
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.65;
+    position: relative;
   }
 
-  .explanation-text :global(pre code) {
-    font-size: 12.5px;
-    line-height: 1.6;
-    color: var(--color-ink);
+  /* Shiki outputs <code> inside <pre> — strip global code styles */
+  .explanation-text :global(pre.shiki-block code),
+  .answer-text :global(pre.shiki-block code) {
     background: none;
     border: none;
     padding: 0;
     border-radius: 0;
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+    font-family: inherit;
   }
 
-  .answer-text :global(pre) {
-    margin: var(--space-sm) 0;
-    padding: var(--space-md);
-    background: var(--color-surface-0, #0d1117);
-    border: 1px solid var(--color-hairline);
-    border-radius: var(--radius-md);
-    overflow-x: auto;
-  }
-
-  .answer-text :global(pre code) {
-    font-size: 12.5px;
-    line-height: 1.6;
-    color: var(--color-ink);
-    background: none;
-    border: none;
-    padding: 0;
-    border-radius: 0;
+  /* Shiki token spans — remove any interference */
+  .explanation-text :global(pre.shiki-block .line),
+  .answer-text :global(pre.shiki-block .line) {
+    display: block;
+    min-height: 1.65em;
   }
 
   /* ── Follow-ups ── */
