@@ -1,4 +1,5 @@
 import type { Category } from "./types";
+import { followupAnswers } from "./followup_answers";
 
 export const categories: Category[] = [
   {
@@ -11,7 +12,8 @@ export const categories: Category[] = [
       {
         id: 1,
         text: "What is the difference between `==` and `.equals()` in Java?",
-        answer: "`==` compares **references** — it checks whether two variables point to the exact same object in memory. `.equals()` compares **content** — what the object actually represents. For primitives like `int` or `char`, `==` compares values directly because primitives live on the stack, not the heap. For objects, you almost always want `.equals()`.",
+        answer:
+            "`==` compares **references** — it checks whether two variables point to the exact same object in memory. `.equals()` compares **content** — what the object actually represents.\n\nFor primitives like `int` or `char`, `==` compares values directly because primitives live on the stack, not the heap. For objects, you almost always want `.equals()`.",
         explanation: `**Analogy:** Think of two people who both own a copy of the same book. They are holding different physical objects (different references), but the content is identical. \`==\` asks "are you holding the exact same physical book?", while \`.equals()\` asks "do your books have the same content?"
 
 \`\`\`java
@@ -42,7 +44,8 @@ But the moment you use \`new String("hello")\`, you bypass the pool and get a fr
       {
         id: 2,
         text: "Explain the difference between `String`, `StringBuilder`, and `StringBuffer`.",
-        answer: "`String` is **immutable** — every modification creates a new object in memory. `StringBuilder` is **mutable** and not thread-safe, designed for single-threaded string manipulation. `StringBuffer` is also mutable but **thread-safe** (all methods are synchronized). In practice: use `String` for values you don't need to change, use `StringBuilder` when building strings in a loop or algorithm, and almost never reach for `StringBuffer` in modern code because synchronized blocks are expensive and you usually control thread access at a higher level.",
+        answer:
+            "`String` is **immutable** — every modification creates a new object in memory. `StringBuilder` is **mutable** and not thread-safe, designed for single-threaded string manipulation. `StringBuffer` is also mutable but **thread-safe** (all methods are synchronized).\n\nIn practice: use `String` for values you don't need to change, use `StringBuilder` when building strings in a loop or algorithm, and almost never reach for `StringBuffer` in modern code because synchronized blocks are expensive and you usually control thread access at a higher level.",
         explanation: `**Analogy:** \`String\` is a printed book — once printed, you can't change it; every "edit" means printing a whole new book. \`StringBuilder\` is a whiteboard — fast to write on, erase, and rewrite, but only one person should use it at a time. \`StringBuffer\` is a whiteboard with a lock on the door — safe for multiple people, but you waste time waiting for the lock.
 
 **The loop trap most junior devs hit:**
@@ -78,7 +81,8 @@ The "bad" version creates thousands of intermediate String objects and hammers t
       {
         id: 3,
         text: "What are the differences between abstract classes and interfaces?",
-        answer: "An **abstract class** can have instance variables, constructors, and a mix of abstract and concrete methods. A class can extend only one abstract class. An **interface** defines a contract — it traditionally had only abstract methods, but since Java 8 it can also have `default` and `static` methods, and since Java 9, `private` helper methods. A class can implement multiple interfaces. The key decision: if you need to share **state** (fields) or provide a **base implementation**, use an abstract class. If you need to define a **capability** that unrelated classes can all share, use an interface.",
+        answer:
+            "An **abstract class** can have instance variables, constructors, and a mix of abstract and concrete methods. A class can extend only one abstract class. An **interface** defines a contract — it traditionally had only abstract methods, but since Java 8 it can also have `default` and `static` methods, and since Java 9, `private` helper methods. A class can implement multiple interfaces.\n\nThe key decision: if you need to share **state** (fields) or provide a **base implementation**, use an abstract class. If you need to define a **capability** that unrelated classes can all share, use an interface.",
         explanation: `**Analogy:** An abstract class is like a base employee contract at a company — it says "all employees get a salary field and a \`clockIn()\` method already implemented." An interface is like a certification — "this entity is \`Printable\`, \`Serializable\`, or \`Comparable\`." A freelance designer and a full-time developer can both be \`Billable\` (interface), but they come from completely different class hierarchies.
 
 **When the decision becomes real:**
@@ -120,7 +124,8 @@ public interface Auditable {
       {
         id: 4,
         text: "What is the difference between `ArrayList` and `LinkedList`?",
-        answer: "`ArrayList` is backed by a **dynamic array** — random access is O(1) but inserting/deleting in the middle is O(n) because elements must shift. `LinkedList` is a **doubly-linked list** — inserting/removing at ends is O(1), but random access is O(n) because you have to walk the chain. In almost every real Spring Boot application, `ArrayList` is the right choice because: (1) we mostly iterate and random-access, not insert-in-middle, (2) `ArrayList`'s contiguous memory layout is CPU-cache friendly, and (3) `LinkedList` has higher memory overhead per node (two pointers per element).",
+        answer:
+            "`ArrayList` is backed by a **dynamic array** — random access is O(1) but inserting/deleting in the middle is O(n) because elements must shift. `LinkedList` is a **doubly-linked list** — inserting/removing at ends is O(1), but random access is O(n) because you have to walk the chain.\n\nIn almost every real Spring Boot application, `ArrayList` is the right choice because: (1) we mostly iterate and random-access, not insert-in-middle, (2) `ArrayList`'s contiguous memory layout is CPU-cache friendly, and (3) `LinkedList` has higher memory overhead per node (two pointers per element).",
         explanation: `**Analogy:** ArrayList is like a numbered shelf in a library — you can instantly jump to shelf #47. LinkedList is like a treasure hunt where each clue leads to the next — to get to clue #47, you walk through 46 clues first.
 
 The time complexity picture:
@@ -147,7 +152,8 @@ List<User> users = new ArrayList<>(10_000);
       {
         id: 5,
         text: "How does `HashMap` work internally? What happens on collision?",
-        answer: "`HashMap` internally uses an **array of buckets** (Entry[]). When you call `put(key, value)`, it calls `key.hashCode()`, applies a bit-mixing function, and takes `hash % capacity` to find the bucket index. If two keys land in the same bucket (collision), they form a chain. Before Java 8, that chain was a **linked list** — worst case O(n) per operation. Since Java 8, when a bucket's chain exceeds 8 entries, it **converts to a red-black tree**, reducing worst-case to O(log n). When the map's fill exceeds `capacity × loadFactor` (default 0.75), it **rehashes** — doubles the array and redistributes all entries.",
+        answer:
+            "`HashMap` internally uses an **array of buckets** (Entry[]). When you call `put(key, value)`, it calls `key.hashCode()`, applies a bit-mixing function, and takes `hash % capacity` to find the bucket index.\n\nIf two keys land in the same bucket (collision), they form a chain. Before Java 8, that chain was a **linked list** — worst case O(n) per operation. Since Java 8, when a bucket's chain exceeds 8 entries, it **converts to a red-black tree**, reducing worst-case to O(log n).\n\nWhen the map's fill exceeds `capacity × loadFactor` (default 0.75), it **rehashes** — doubles the array and redistributes all entries.",
         explanation: `**Analogy:** Imagine a building with 16 floors (buckets). When you store something, the receptionist looks at your name tag (hashCode), does some math, and sends you to a floor. If floor 7 already has people (collision), they sit in a row of chairs (linked list) — or if it gets really crowded, they get an organized seating chart (red-black tree). Rehashing is the building expanding to 32 floors and everyone moving to potentially different floors.
 
 **The key thing that breaks HashMap:** If your key's hashCode() always returns the same value — every entry lands in one bucket, turning your map into a linked list. O(n) for every get. This is actually a known denial-of-service vector in web apps where user-controlled input becomes map keys.
@@ -181,7 +187,8 @@ public class UserId {
       {
         id: 6,
         text: "What is the difference between `HashMap`, `LinkedHashMap`, and `TreeMap`?",
-        answer: "All three implement the `Map` interface but differ in **ordering** and **performance**. `HashMap` makes no guarantees about iteration order — O(1) average for get/put. `LinkedHashMap` maintains **insertion order** (or access order if configured) by layering a doubly-linked list on top of the hash table — still O(1) for get/put with slightly more memory. `TreeMap` stores keys in **sorted order** (natural or via Comparator) using a red-black tree — O(log n) for get/put. `TreeMap` cannot have null keys; `HashMap` and `LinkedHashMap` allow one null key.",
+        answer:
+            "All three implement the `Map` interface but differ in **ordering** and **performance**. `HashMap` makes no guarantees about iteration order — O(1) average for get/put. `LinkedHashMap` maintains **insertion order** (or access order if configured) by layering a doubly-linked list on top of the hash table — still O(1) for get/put with slightly more memory. `TreeMap` stores keys in **sorted order** (natural or via Comparator) using a red-black tree — O(log n) for get/put.\n\n`TreeMap` cannot have null keys; `HashMap` and `LinkedHashMap` allow one null key.",
         explanation: `**Analogy:** HashMap is a junk drawer — fast to toss things in and grab them, but no order. LinkedHashMap is a filing cabinet where new folders go at the back — you can walk through them in the order you added them. TreeMap is an alphabetically sorted index — slower to insert, but you can always ask "give me everything between A and F" in sorted order.
 
 **Real-world usage in Spring:**
@@ -213,7 +220,8 @@ TreeMap<String, List<String>> errorsByCode = new TreeMap<>();
       {
         id: 7,
         text: "What is the difference between `HashSet`, `LinkedHashSet`, and `TreeSet`?",
-        answer: "`HashSet` is backed by a `HashMap` (values are stored as keys, a dummy object as value) — O(1) for add/contains/remove, no ordering. `LinkedHashSet` extends `HashSet` with a linked list to maintain **insertion order** — same O(1) operations, slight memory overhead. `TreeSet` implements `SortedSet` — elements are kept in **natural sorted order** or by a `Comparator`, using a red-black tree, so O(log n) operations. `HashSet` allows one `null`; `TreeSet` throws `NullPointerException` because it can't compare null to other elements.",
+        answer:
+            "`HashSet` is backed by a `HashMap` (values are stored as keys, a dummy object as value) — O(1) for add/contains/remove, no ordering. `LinkedHashSet` extends `HashSet` with a linked list to maintain **insertion order** — same O(1) operations, slight memory overhead. `TreeSet` implements `SortedSet` — elements are kept in **natural sorted order** or by a `Comparator`, using a red-black tree, so O(log n) operations.\n\n`HashSet` allows one `null`; `TreeSet` throws `NullPointerException` because it can't compare null to other elements.",
         explanation: `**Analogy:** HashSet is a bucket of unique marbles — you can quickly check if a marble is in there but don't know the order. LinkedHashSet is the same bucket but you've tied a string through the marbles in the order you added them — still fast, just ordered. TreeSet is a display rack that keeps marbles sorted by size automatically.
 
 **The key: Sets guarantee uniqueness.** Uniqueness is determined by equals() and hashCode() — so if you add the same value twice, you still get one entry.
@@ -246,7 +254,8 @@ System.out.println(scores.headSet(90)); // [78] — all scores below 90
       {
         id: 8,
         text: "Explain the concept of immutability. How do you create an immutable class in Java?",
-        answer: "An immutable object's **state cannot be changed after construction**. To create an immutable class: (1) declare the class `final` so it can't be subclassed, (2) make all fields `private final`, (3) don't provide setters, (4) initialize all fields in the constructor, (5) for any mutable field (like a `List` or `Date`), make a **defensive copy** in the constructor and return a defensive copy in the getter. Java's built-in `String`, `Integer`, `LocalDate` are all immutable. Since Java 16, `record` types give you immutability out of the box.",
+        answer:
+            "An immutable object's **state cannot be changed after construction**. To create an immutable class: (1) declare the class `final` so it can't be subclassed, (2) make all fields `private final`, (3) don't provide setters, (4) initialize all fields in the constructor, (5) for any mutable field (like a `List` or `Date`), make a **defensive copy** in the constructor and return a defensive copy in the getter.\n\nJava's built-in `String`, `Integer`, `LocalDate` are all immutable. Since Java 16, `record` types give you immutability out of the box.",
         explanation: `**Analogy:** An immutable object is like a signed contract — once signed, neither party can change the terms. If you want different terms, you create a new contract entirely.
 
 **The defensive copy trap that trips people:** Just making fields final isn't enough if the field is a mutable object.
@@ -267,7 +276,7 @@ public final class BrokenRange {
 
 // Caller can mutate your "immutable" object:
 List<Integer> list = new ArrayList<>(Arrays.asList(1, 2, 3));
-BrokenRange range = new BrokenRange(list);
+  BrokenRange range = new BrokenRange(list);
 list.add(99); // NOW range.getValues() has 4 elements!
 
 // FIXED — defensive copies in and out
@@ -299,7 +308,8 @@ public record UserDto(Long id, String name, String email) {}
       {
         id: 9,
         text: "What is the difference between checked and unchecked exceptions?",
-        answer: "**Checked exceptions** extend `Exception` (but not `RuntimeException`) — the compiler forces you to either catch them or declare them in the method signature with `throws`. They represent conditions the caller is expected to anticipate and handle (e.g., `IOException`, `SQLException`). **Unchecked exceptions** extend `RuntimeException` — no compiler enforcement, they propagate up the call stack until caught or the program crashes (e.g., `NullPointerException`, `IllegalArgumentException`). In modern Spring applications, **unchecked exceptions are almost always preferred** for custom exceptions because they don't pollute every method signature, and Spring's `@ControllerAdvice` handles them globally.",
+        answer:
+            "**Checked exceptions** extend `Exception` (but not `RuntimeException`) — the compiler forces you to either catch them or declare them in the method signature with `throws`. They represent conditions the caller is expected to anticipate and handle (e.g., `IOException`, `SQLException`).\n\n**Unchecked exceptions** extend `RuntimeException` — no compiler enforcement, they propagate up the call stack until caught or the program crashes (e.g., `NullPointerException`, `IllegalArgumentException`). In modern Spring applications, **unchecked exceptions are almost always preferred** for custom exceptions because they don't pollute every method signature, and Spring's `@ControllerAdvice` handles them globally.",
         explanation: `**Analogy:** A checked exception is like your GPS saying "this road is under construction — you MUST acknowledge this and pick an alternate route before driving." An unchecked exception is like hitting a pothole you didn't know was there — it blows out your tire (crashes), and you deal with it afterward.
 
 **The Spring pattern for custom exceptions:**
@@ -347,7 +357,8 @@ public class GlobalExceptionHandler {
       {
         id: 10,
         text: "What is the try-with-resources statement and why is it useful?",
-        answer: "Try-with-resources (introduced in Java 7) **automatically closes resources** declared in the try header when the block exits — whether normally, or due to an exception. A resource must implement the `AutoCloseable` interface (one method: `close()`). Before this, developers had to write `finally` blocks to close streams, DB connections, etc. — and frequently got it wrong by forgetting to check for null or handle exceptions thrown by `close()` itself. Try-with-resources fixes all of that.",
+        answer:
+            "Try-with-resources (introduced in Java 7) **automatically closes resources** declared in the try header when the block exits — whether normally, or due to an exception. A resource must implement the `AutoCloseable` interface (one method: `close()`).\n\nBefore this, developers had to write `finally` blocks to close streams, DB connections, etc. — and frequently got it wrong by forgetting to check for null or handle exceptions thrown by `close()` itself. Try-with-resources fixes all of that.",
         explanation: `**The old way — fragile and verbose:**
 
 \`\`\`java
@@ -401,7 +412,8 @@ try (
       {
         id: 11,
         text: "Explain the concept of autoboxing and unboxing.",
-        answer: "**Autoboxing** is the automatic conversion Java does when you assign a primitive to its wrapper type (e.g., `int` → `Integer`). **Unboxing** is the reverse — wrapper to primitive. Java does this transparently, so you can write `Integer x = 5` without an explicit `Integer.valueOf(5)`. The compiler inserts those calls for you. The traps: (1) unboxing a `null` wrapper causes `NullPointerException`, (2) comparing boxed values with `==` is unreliable due to the Integer cache (-128 to 127), and (3) autoboxing in tight loops creates garbage that pressures the GC.",
+        answer:
+            "**Autoboxing** is the automatic conversion Java does when you assign a primitive to its wrapper type (e.g., `int` → `Integer`). **Unboxing** is the reverse — wrapper to primitive. Java does this transparently, so you can write `Integer x = 5` without an explicit `Integer.valueOf(5)`. The compiler inserts those calls for you.\n\nThe traps: (1) unboxing a `null` wrapper causes `NullPointerException`, (2) comparing boxed values with `==` is unreliable due to the Integer cache (-128 to 127), and (3) autoboxing in tight loops creates garbage that pressures the GC.",
         explanation: `**The null unboxing trap — a real production bug:**
 
 \`\`\`java
@@ -448,7 +460,8 @@ int sum = nums.stream()
       {
         id: 12,
         text: "What is the difference between `final`, `finally`, and `finalize()`?",
-        answer: "These three have nothing to do with each other beyond sharing the word 'final'. **`final`** is a modifier: on a variable = can't reassign, on a method = can't override, on a class = can't extend. **`finally`** is a block in exception handling that always runs after try/catch, regardless of whether an exception was thrown — used for cleanup. **`finalize()`** was a method on `Object` called by the GC before collecting an object — it was **deprecated in Java 9** and removed in Java 18 because it was unreliable, slow, and caused GC pauses. Use `AutoCloseable` + try-with-resources instead.",
+        answer:
+            "These three have nothing to do with each other beyond sharing the word 'final'. **`final`** is a modifier: on a variable = can't reassign, on a method = can't override, on a class = can't extend. **`finally`** is a block in exception handling that always runs after try/catch, regardless of whether an exception was thrown — used for cleanup.\n\n**`finalize()`** was a method on `Object` called by the GC before collecting an object — it was **deprecated in Java 9** and removed in Java 18 because it was unreliable, slow, and caused GC pauses. Use `AutoCloseable` + try-with-resources instead.",
         explanation: `**final — three distinct uses:**
 
 \`\`\`java
@@ -490,7 +503,8 @@ The problem was that finalize() ran on the GC thread at an indeterminate time. O
       {
         id: 13,
         text: "What are functional interfaces? Give examples of built-in ones.",
-        answer: "A functional interface has **exactly one abstract method** — that's what makes it a valid target for a lambda expression or method reference. The `@FunctionalInterface` annotation is optional but recommended — it makes the compiler enforce the single-abstract-method rule. Built-in ones in `java.util.function`: `Predicate<T>` (takes T, returns boolean), `Function<T,R>` (takes T, returns R), `Consumer<T>` (takes T, returns nothing), `Supplier<T>` (takes nothing, returns T), `BiFunction<T,U,R>` (takes two args). A functional interface CAN have multiple default or static methods — only the abstract method count matters.",
+        answer:
+            "A functional interface has **exactly one abstract method** — that's what makes it a valid target for a lambda expression or method reference. The `@FunctionalInterface` annotation is optional but recommended — it makes the compiler enforce the single-abstract-method rule.\n\nBuilt-in ones in `java.util.function`: `Predicate<T>` (takes T, returns boolean), `Function<T,R>` (takes T, returns R), `Consumer<T>` (takes T, returns nothing), `Supplier<T>` (takes nothing, returns T), `BiFunction<T,U,R>` (takes two args). A functional interface CAN have multiple default or static methods — only the abstract method count matters.",
         explanation: `**The four workhorses you'll use constantly:**
 
 \`\`\`java
@@ -523,7 +537,8 @@ User user = Optional.ofNullable(foundUser).orElseGet(defaultUser);
       {
         id: 14,
         text: "What are Lambda expressions and how do they improve code readability?",
-        answer: "A lambda is an **anonymous function** — it has parameters, a body, and a return type, but no name and no class. Lambdas implement functional interfaces inline, eliminating the need for anonymous inner class boilerplate. The syntax is `(parameters) -> expression` or `(parameters) -> { block; }`. They don't just save lines — they make the *intent* clearer by keeping the 'what to do' close to 'where it's used.' Method references (`Class::method`) go even further by eliminating the lambda wrapping when you're just delegating to an existing method.",
+        answer:
+            "A lambda is an **anonymous function** — it has parameters, a body, and a return type, but no name and no class. Lambdas implement functional interfaces inline, eliminating the need for anonymous inner class boilerplate. The syntax is `(parameters) -> expression` or `(parameters) -> { block; }`.\n\nThey don't just save lines — they make the *intent* clearer by keeping the 'what to do' close to 'where it's used.' Method references (`Class::method`) go even further by eliminating the lambda wrapping when you're just delegating to an existing method.",
         explanation: `**Before lambdas — anonymous inner class noise:**
 
 \`\`\`java
@@ -570,7 +585,8 @@ public class MyService {
       {
         id: 15,
         text: "Explain the Stream API — what is the difference between intermediate and terminal operations?",
-        answer: "**Intermediate operations** (like `filter`, `map`, `sorted`, `distinct`) transform the stream and return a new stream — they are **lazy**, meaning they don't execute until a terminal operation is called. **Terminal operations** (like `collect`, `forEach`, `count`, `findFirst`, `reduce`) trigger actual processing and produce a result or side effect. Streams are single-use — once a terminal operation is called, the stream is consumed and can't be reused. The laziness matters for performance: `filter(...).map(...).findFirst()` stops as soon as the first match is found — it doesn't process the entire collection.",
+        answer:
+            "**Intermediate operations** (like `filter`, `map`, `sorted`, `distinct`) transform the stream and return a new stream — they are **lazy**, meaning they don't execute until a terminal operation is called. **Terminal operations** (like `collect`, `forEach`, `count`, `findFirst`, `reduce`) trigger actual processing and produce a result or side effect.\n\nStreams are single-use — once a terminal operation is called, the stream is consumed and can't be reused. The laziness matters for performance: `filter(...).map(...).findFirst()` stops as soon as the first match is found — it doesn't process the entire collection.",
         explanation: `**Laziness in action — short-circuiting:**
 
 \`\`\`java
@@ -612,7 +628,8 @@ List<String> result = pipeline.collect(Collectors.toList());
       {
         id: 16,
         text: "What is the difference between `map()` and `flatMap()` in streams?",
-        answer: "`map()` applies a function to each element and produces **one output per input** — the stream stays the same size. `flatMap()` applies a function that returns a stream for each element, then **flattens all those streams into one** — use it when each element produces multiple results. The mental model: `map` is 1-to-1 transformation; `flatMap` is 1-to-many transformation where you want the results in a single flat stream, not a stream of lists.",
+        answer:
+            "`map()` applies a function to each element and produces **one output per input** — the stream stays the same size. `flatMap()` applies a function that returns a stream for each element, then **flattens all those streams into one** — use it when each element produces multiple results.\n\nThe mental model: `map` is 1-to-1 transformation; `flatMap` is 1-to-many transformation where you want the results in a single flat stream, not a stream of lists.",
         explanation: `**The concrete problem map() can't solve:**
 
 \`\`\`java
@@ -665,7 +682,8 @@ int totalAge = users.stream()
       {
         id: 17,
         text: "What is the difference between `Comparable` and `Comparator`?",
-        answer: "`Comparable` defines the **natural ordering** of a class — it's implemented on the class itself via `compareTo()`. It bakes ordering into the class: `String`, `Integer`, `LocalDate` all implement Comparable. `Comparator` is an **external ordering strategy** — a separate object that knows how to compare two instances. Use Comparable for the default sort order that makes the most sense for the type. Use Comparator when you need an alternative sort order, or when sorting a class you don't own (third-party or JDK class).",
+        answer:
+            "`Comparable` defines the **natural ordering** of a class — it's implemented on the class itself via `compareTo()`. It bakes ordering into the class: `String`, `Integer`, `LocalDate` all implement Comparable.\n\n`Comparator` is an **external ordering strategy** — a separate object that knows how to compare two instances. Use Comparable for the default sort order that makes the most sense for the type. Use Comparator when you need an alternative sort order, or when sorting a class you don't own (third-party or JDK class).",
         explanation: `**Comparable — the class defines its own order:**
 
 \`\`\`java
@@ -716,7 +734,8 @@ Comparator<Product> safeSort = Comparator.comparing(
       {
         id: 18,
         text: "What is the diamond problem in Java, and how does Java handle it with interfaces?",
-        answer: "The diamond problem occurs when a class inherits from two sources that both define the same method, creating ambiguity about which version to use. Java avoids this for classes by **disallowing multiple class inheritance** — a class can only extend one class. But with interfaces, since Java 8 introduced `default` methods, a class can implement two interfaces that both have the same default method. Java resolves this by **forcing the implementing class to override the method** — the code won't compile until you do. The priority rules: class wins over interface, more specific interface wins over more general.",
+        answer:
+            "The diamond problem occurs when a class inherits from two sources that both define the same method, creating ambiguity about which version to use. Java avoids this for classes by **disallowing multiple class inheritance** — a class can only extend one class.\n\nBut with interfaces, since Java 8 introduced `default` methods, a class can implement two interfaces that both have the same default method. Java resolves this by **forcing the implementing class to override the method** — the code won't compile until you do. The priority rules: class wins over interface, more specific interface wins over more general.",
         explanation: `**The ambiguity the compiler catches:**
 
 \`\`\`java
@@ -756,7 +775,8 @@ class C implements A, B {
       {
         id: 19,
         text: "Explain method overloading vs method overriding.",
-        answer: "**Overloading** is having multiple methods with the same name in the same class but **different parameter lists** (different type, count, or order). Resolved at **compile time** based on the argument types — this is static/compile-time polymorphism. **Overriding** is when a subclass provides a **different implementation for a method inherited from the parent class** — same name, same parameter list, same (or covariant) return type. Resolved at **runtime** based on the actual object type — this is dynamic/runtime polymorphism.",
+        answer:
+            "**Overloading** is having multiple methods with the same name in the same class but **different parameter lists** (different type, count, or order). Resolved at **compile time** based on the argument types — this is static/compile-time polymorphism.\n\n**Overriding** is when a subclass provides a **different implementation for a method inherited from the parent class** — same name, same parameter list, same (or covariant) return type. Resolved at **runtime** based on the actual object type — this is dynamic/runtime polymorphism.",
         explanation: `**Overloading — resolved at compile time:**
 
 \`\`\`java
@@ -814,7 +834,8 @@ p.greet(); // "Parent" — resolved at compile time, not runtime
       {
         id: 20,
         text: "What is the significance of the `static` keyword?",
-        answer: "`static` means the member belongs to the **class itself**, not to any particular instance. A static field is shared across all instances — there's only one copy per class. A static method can be called without creating an object. Static blocks run once when the class is loaded by the JVM. Static nested classes don't hold a reference to the outer class instance. Key implications: static members can't access instance fields/methods (no `this` reference), and they can't be overridden (only hidden).",
+        answer:
+            "`static` means the member belongs to the **class itself**, not to any particular instance. A static field is shared across all instances — there's only one copy per class. A static method can be called without creating an object. Static blocks run once when the class is loaded by the JVM. Static nested classes don't hold a reference to the outer class instance.\n\nKey implications: static members can't access instance fields/methods (no `this` reference), and they can't be overridden (only hidden).",
         explanation: `**When static makes sense vs when it's a trap:**
 
 \`\`\`java
@@ -865,7 +886,8 @@ when(service.get(1L)).thenReturn(user);
       {
         id: 21,
         text: "What are Java generics and why are they used?",
-        answer: "Generics let you write **type-safe, reusable code** by parameterizing classes and methods with type placeholders. Instead of `List list` (where you could accidentally mix types), you write `List<String>` — the compiler enforces that only Strings go in and come out. At **runtime, generics are erased** (type erasure) — `List<String>` becomes `List` in bytecode. This is why you can't do `new T[]`, `instanceof T`, or `T.class` at runtime — the JVM doesn't know what `T` is anymore.",
+        answer:
+            "Generics let you write **type-safe, reusable code** by parameterizing classes and methods with type placeholders. Instead of `List list` (where you could accidentally mix types), you write `List<String>` — the compiler enforces that only Strings go in and come out.\n\nAt **runtime, generics are erased** (type erasure) — `List<String>` becomes `List` in bytecode. This is why you can't do `new T[]`, `instanceof T`, or `T.class` at runtime — the JVM doesn't know what `T` is anymore.",
         explanation: `**Why generics exist — the pre-generics pain:**
 
 \`\`\`java
@@ -920,7 +942,8 @@ void addNumbers(List<? super Integer> list) {
       {
         id: 22,
         text: "What is the volatile keyword used for?",
-        answer: "`volatile` guarantees **visibility** — when one thread writes to a volatile variable, the new value is immediately visible to all other threads. Without it, threads may read stale values from their CPU cache. What `volatile` does NOT guarantee: **atomicity**. `count++` is a read-modify-write operation — even if `count` is volatile, two threads doing `count++` simultaneously can both read the same value and both write the same result, losing an increment. Use `AtomicInteger` for thread-safe incrementing, and `synchronized` when you need to protect a multi-step critical section.",
+        answer:
+            "`volatile` guarantees **visibility** — when one thread writes to a volatile variable, the new value is immediately visible to all other threads. Without it, threads may read stale values from their CPU cache.\n\nWhat `volatile` does NOT guarantee: **atomicity**. `count++` is a read-modify-write operation — even if `count` is volatile, two threads doing `count++` simultaneously can both read the same value and both write the same result, losing an increment. Use `AtomicInteger` for thread-safe incrementing, and `synchronized` when you need to protect a multi-step critical section.",
         explanation: `**The visibility problem volatile solves:**
 
 \`\`\`java
@@ -985,7 +1008,8 @@ class Singleton {
       {
         id: 23,
         text: "Explain the basics of multithreading — `Thread` vs `Runnable`.",
-        answer: "Prefer `Runnable` over extending `Thread`. Extending `Thread` burns your only inheritance slot and tightly couples the task to the threading mechanism. `Runnable` separates what to do from how it runs — you can pass the same `Runnable` to a thread pool, a timer, or a new `Thread`. `Callable<T>` is like `Runnable` but can return a value and throw checked exceptions. In modern Java, you almost never directly extend `Thread` — you pass `Runnable` or `Callable` to an `ExecutorService`.",
+        answer:
+            "Prefer `Runnable` over extending `Thread`. Extending `Thread` burns your only inheritance slot and tightly couples the task to the threading mechanism. `Runnable` separates what to do from how it runs — you can pass the same `Runnable` to a thread pool, a timer, or a new `Thread`.\n\n`Callable<T>` is like `Runnable` but can return a value and throw checked exceptions. In modern Java, you almost never directly extend `Thread` — you pass `Runnable` or `Callable` to an `ExecutorService`.",
         explanation: `**The extends Thread approach — don't do this:**
 
 \`\`\`java
@@ -1030,7 +1054,8 @@ t.start(); // GOOD — creates a new OS thread, run() executes on that thread
       {
         id: 24,
         text: "What is the difference between `synchronized` method and `synchronized` block?",
-        answer: "A **synchronized method** locks the entire method — on `this` for instance methods, on the `Class` object for static methods. A **synchronized block** locks only a specific section of code, and you choose the monitor object explicitly. Prefer synchronized blocks because they minimize the time you hold the lock — narrower critical sections mean less contention and better throughput. If you synchronize a whole method that does 90% non-shared work, you're blocking other threads unnecessarily for the whole duration.",
+        answer:
+            "A **synchronized method** locks the entire method — on `this` for instance methods, on the `Class` object for static methods. A **synchronized block** locks only a specific section of code, and you choose the monitor object explicitly.\n\nPrefer synchronized blocks because they minimize the time you hold the lock — narrower critical sections mean less contention and better throughput. If you synchronize a whole method that does 90% non-shared work, you're blocking other threads unnecessarily for the whole duration.",
         explanation: `**Synchronized method — locks the whole thing:**
 
 \`\`\`java
@@ -1088,7 +1113,8 @@ synchronized (lock) { ... } // safer than synchronized (this)
       {
         id: 25,
         text: "What are `ExecutorService` and thread pools?",
-        answer: "`ExecutorService` is the standard Java API for managing a pool of reusable threads. Instead of creating a new `Thread` for every task (expensive — OS thread creation costs ~1ms and ~1MB stack), you submit tasks to a pool that recycles threads. `execute(Runnable)` is fire-and-forget — no return value. `submit(Callable)` returns a `Future<T>` that you can use to get the result, check completion, or cancel. In Spring Boot, `@Async` methods use an `ExecutorService` under the hood, and you configure it via a `ThreadPoolTaskExecutor` bean.",
+        answer:
+            "`ExecutorService` is the standard Java API for managing a pool of reusable threads. Instead of creating a new `Thread` for every task (expensive — OS thread creation costs ~1ms and ~1MB stack), you submit tasks to a pool that recycles threads.\n\n`execute(Runnable)` is fire-and-forget — no return value. `submit(Callable)` returns a `Future<T>` that you can use to get the result, check completion, or cancel.\n\nIn Spring Boot, `@Async` methods use an `ExecutorService` under the hood, and you configure it via a `ThreadPoolTaskExecutor` bean.",
         explanation: `**The cost of creating threads manually:**
 
 \`\`\`java
@@ -1150,7 +1176,8 @@ public class EmailService {
       {
         id: 26,
         text: "What is a deadlock, and how can it be avoided?",
-        answer: "A deadlock happens when two or more threads are each waiting for a lock held by the other — creating a circular wait where nobody makes progress. The four necessary conditions (Coffman): **mutual exclusion** (resource can only be held by one thread), **hold and wait** (thread holds one lock while waiting for another), **no preemption** (locks can't be forcibly taken), and **circular wait** (thread A waits for B, B waits for A). Break any one of these and deadlock can't occur. Common strategies: consistent lock ordering, using `tryLock()` with timeout, or restructuring to avoid holding multiple locks.",
+        answer:
+            "A deadlock happens when two or more threads are each waiting for a lock held by the other — creating a circular wait where nobody makes progress. The four necessary conditions (Coffman): **mutual exclusion** (resource can only be held by one thread), **hold and wait** (thread holds one lock while waiting for another), **no preemption** (locks can't be forcibly taken), and **circular wait** (thread A waits for B, B waits for A). Break any one of these and deadlock can't occur.\n\nCommon strategies: consistent lock ordering, using `tryLock()` with timeout, or restructuring to avoid holding multiple locks.",
         explanation: `**The classic deadlock:**
 
 \`\`\`java
@@ -1222,7 +1249,8 @@ if (lockA.tryLock(1, TimeUnit.SECONDS)) {
       {
         id: 27,
         text: "What is garbage collection in Java, and how does it work at a high level?",
-        answer: "Java's garbage collector automatically reclaims memory for objects that are no longer reachable from any live thread or static variable. It works on the **generational hypothesis**: most objects die young. The heap is split into **Young Generation** (new objects) and **Old Generation** (long-lived objects). Minor GC runs frequently to clean up Eden space (where new objects are born) — it's fast because most objects are already dead. Major/Full GC cleans the Old Generation — it's slower and pauses the application. Modern collectors like G1GC and ZGC reduce pause times by doing most work concurrently with the application.",
+        answer:
+            "Java's garbage collector automatically reclaims memory for objects that are no longer reachable from any live thread or static variable. It works on the **generational hypothesis**: most objects die young.\n\nThe heap is split into **Young Generation** (new objects) and **Old Generation** (long-lived objects). Minor GC runs frequently to clean up Eden space (where new objects are born) — it's fast because most objects are already dead. Major/Full GC cleans the Old Generation — it's slower and pauses the application.\n\nModern collectors like G1GC and ZGC reduce pause times by doing most work concurrently with the application.",
         explanation: `**The generational heap — how objects move:**
 
 Young Gen (Eden → Survivor 1 → Survivor 2) → Old Gen → (never collected = memory leak)
@@ -1259,7 +1287,8 @@ while (true) {
       {
         id: 28,
         text: "What are the different types of references in Java (strong, weak, soft, phantom)?",
-        answer: "Java has four reference strengths that affect whether the GC collects an object. **Strong reference** (normal `=` assignment) — GC never collects reachable objects. **Soft reference** (`SoftReference<T>`) — collected only when memory is low; useful for memory-sensitive caches. **Weak reference** (`WeakReference<T>`) — collected at the next GC cycle whenever no strong references exist; useful for caches where you don't want to prevent collection. **Phantom reference** — object is already finalized, enqueued for post-mortem cleanup; useful for off-heap resource cleanup. `WeakHashMap` uses weak keys — entries disappear automatically when keys are garbage collected.",
+        answer:
+            "Java has four reference strengths that affect whether the GC collects an object. **Strong reference** (normal `=` assignment) — GC never collects reachable objects. **Soft reference** (`SoftReference<T>`) — collected only when memory is low; useful for memory-sensitive caches. **Weak reference** (`WeakReference<T>`) — collected at the next GC cycle whenever no strong references exist; useful for caches where you don't want to prevent collection. **Phantom reference** — object is already finalized, enqueued for post-mortem cleanup; useful for off-heap resource cleanup.\n\n`WeakHashMap` uses weak keys — entries disappear automatically when keys are garbage collected.",
         explanation: `**Analogy:** Strong reference = you're holding onto a book. Soft reference = library's last copy — they'll take it back only if desperately short on shelf space. Weak reference = a sticky note pointing to where the book is — if someone donates it away, your note becomes useless. Phantom reference = you've returned the book but haven't signed the return slip yet.
 
 **WeakHashMap — the practical use case:**
@@ -1310,7 +1339,8 @@ if (image == null) {
       {
         id: 29,
         text: "Explain the four pillars of OOP with examples.",
-        answer: "**Encapsulation** — bundle state and behavior together, hide internal details. A `BankAccount` class exposes `deposit()` and `withdraw()` but keeps `balance` private. **Abstraction** — expose only what's necessary, hide complexity. A `PaymentService` interface exposes `processPayment()` — callers don't know if it talks to Stripe or PayPal. **Inheritance** — a subclass inherits and extends a parent's behavior. `SavingsAccount extends BankAccount` adds interest calculation. **Polymorphism** — the same interface behaves differently based on the actual type. A `List<PaymentProcessor>` can hold Stripe, PayPal, and Apple Pay processors, all called the same way.",
+        answer:
+            "**Encapsulation** — bundle state and behavior together, hide internal details. A `BankAccount` class exposes `deposit()` and `withdraw()` but keeps `balance` private. **Abstraction** — expose only what's necessary, hide complexity. A `PaymentService` interface exposes `processPayment()` — callers don't know if it talks to Stripe or PayPal.\n\n**Inheritance** — a subclass inherits and extends a parent's behavior. `SavingsAccount extends BankAccount` adds interest calculation. **Polymorphism** — the same interface behaves differently based on the actual type. A `List<PaymentProcessor>` can hold Stripe, PayPal, and Apple Pay processors, all called the same way.",
         explanation: `**The Spring context for each pillar:**
 
 **Encapsulation:** Your service layer encapsulates business logic and hides repository details from controllers. The controller calls userService.createUser(dto) — it doesn't know whether that triggers a DB write, a Kafka event, or both.
@@ -1369,7 +1399,8 @@ public class OrderService {
       {
         id: 30,
         text: "What is polymorphism — compile-time vs runtime?",
-        answer: "**Compile-time polymorphism** (static dispatch) is achieved through **method overloading** — the compiler picks which method to call based on the argument types at compile time. **Runtime polymorphism** (dynamic dispatch) is achieved through **method overriding** — the JVM picks which implementation to call based on the actual object type at runtime, not the declared variable type. Runtime polymorphism is what makes dependency injection and interface-based programming powerful — you can swap implementations without changing callers.",
+        answer:
+            "**Compile-time polymorphism** (static dispatch) is achieved through **method overloading** — the compiler picks which method to call based on the argument types at compile time.\n\n**Runtime polymorphism** (dynamic dispatch) is achieved through **method overriding** — the JVM picks which implementation to call based on the actual object type at runtime, not the declared variable type. Runtime polymorphism is what makes dependency injection and interface-based programming powerful — you can swap implementations without changing callers.",
         explanation: `**Compile-time — decided before the program runs:**
 
 \`\`\`java
@@ -1418,7 +1449,8 @@ for (Shape s : shapes) {
       {
         id: 31,
         text: "What is the difference between composition and inheritance? Which is preferred and why?",
-        answer: "**Inheritance** models an \"is-a\" relationship — `Dog extends Animal`. The subclass is tightly coupled to the parent's implementation; changes to the parent break the subclass (fragile base class problem). **Composition** models a \"has-a\" relationship — `Car has an Engine`. You delegate to contained objects rather than inheriting from them. Composition is preferred in most cases because: you can swap the composed component at runtime, you can mix multiple behaviors without deep hierarchies, and changes to the component don't affect the container. The GoF book says: **\"Favor object composition over class inheritance.\"**",
+        answer:
+            "**Inheritance** models an \"is-a\" relationship — `Dog extends Animal`. The subclass is tightly coupled to the parent's implementation; changes to the parent break the subclass (fragile base class problem).\n\n**Composition** models a \"has-a\" relationship — `Car has an Engine`. You delegate to contained objects rather than inheriting from them.\n\nComposition is preferred in most cases because: you can swap the composed component at runtime, you can mix multiple behaviors without deep hierarchies, and changes to the component don't affect the container. The GoF book says: **\"Favor object composition over class inheritance.\"**",
         explanation: `**The fragile base class problem inheritance creates:**
 
 \`\`\`java
@@ -1482,7 +1514,8 @@ class InstrumentedSet<E> implements Set<E> {
       {
         id: 32,
         text: "What is coupling and cohesion?",
-        answer: "**Coupling** measures how much one class/module depends on another. **Low coupling** is good — components can change independently. **High coupling** is bad — changing one thing forces changes everywhere. **Cohesion** measures how focused a class/module is — does everything in it belong together? **High cohesion** is good — a class does one clear thing. **Low cohesion** is bad — a class does too many unrelated things. The goal is **high cohesion + low coupling**: each class does one thing well and doesn't need to know details of other classes.",
+        answer:
+            "**Coupling** measures how much one class/module depends on another. **Low coupling** is good — components can change independently. **High coupling** is bad — changing one thing forces changes everywhere.\n\n**Cohesion** measures how focused a class/module is — does everything in it belong together? **High cohesion** is good — a class does one clear thing. **Low cohesion** is bad — a class does too many unrelated things. The goal is **high cohesion + low coupling**: each class does one thing well and doesn't need to know details of other classes.",
         explanation: `**Analogy:** A Swiss Army knife has low cohesion — it does many unrelated things. A scalpel has high cohesion — it does exactly one thing perfectly. An operating room has low coupling — the anesthesiologist doesn't need to know the details of the surgeon's stitching technique; they communicate through standardized protocols.
 
 **Tight coupling — the problem:**
@@ -1538,7 +1571,8 @@ public class InvoiceService { void generateInvoice(Long userId) { ... } }
       {
         id: 33,
         text: "Explain SOLID principles with examples.",
-        answer: "**S**ingle Responsibility: a class should have only one reason to change. **O**pen/Closed: classes should be open for extension but closed for modification — add behavior through new classes, not by editing existing ones. **L**iskov Substitution: subclasses should be substitutable for their parent class without breaking the program. **I**nterface Segregation: prefer small, focused interfaces over fat ones — clients shouldn't depend on methods they don't use. **D**ependency Inversion: depend on abstractions, not concretions — high-level modules shouldn't depend on low-level modules directly.",
+        answer:
+            "**S**ingle Responsibility: a class should have only one reason to change. **O**pen/Closed: classes should be open for extension but closed for modification — add behavior through new classes, not by editing existing ones.\n\n**L**iskov Substitution: subclasses should be substitutable for their parent class without breaking the program.\n\n**I**nterface Segregation: prefer small, focused interfaces over fat ones — clients shouldn't depend on methods they don't use. **D**ependency Inversion: depend on abstractions, not concretions — high-level modules shouldn't depend on low-level modules directly.",
         explanation: `**S — Single Responsibility:**
 \`\`\`java
 // VIOLATION — one class handles both user logic AND email
@@ -1618,7 +1652,8 @@ class OrderService {
       {
         id: 34,
         text: "What are some common design patterns you've used (Singleton, Factory, Builder, Strategy, Observer)? Extra: Facade, Adapter",
-        answer: "**Singleton** — one instance per JVM (Spring beans are singletons by default). **Factory** — abstract object creation; Spring's `ApplicationContext.getBean()` is a factory. **Builder** — construct complex objects step by step; `ResponseEntity.ok().header(...).body(...)` is a builder. **Strategy** — swap algorithms at runtime through an interface; payment gateway selection is a strategy. **Observer** — publish/subscribe; Spring's `ApplicationEvent` system is observer. **Facade** — simplified interface to a complex subsystem. **Adapter** — make incompatible interfaces work together.",
+        answer:
+            "**Singleton** — one instance per JVM (Spring beans are singletons by default). **Factory** — abstract object creation; Spring's `ApplicationContext.getBean()` is a factory. **Builder** — construct complex objects step by step; `ResponseEntity.ok().header(...).body(...)` is a builder.\n\n**Strategy** — swap algorithms at runtime through an interface; payment gateway selection is a strategy. **Observer** — publish/subscribe; Spring's `ApplicationEvent` system is observer.\n\n**Facade** — simplified interface to a complex subsystem. **Adapter** — make incompatible interfaces work together.",
         explanation: `**Builder — the one you use constantly in Spring:**
 \`\`\`java
 // Spring's own ResponseEntity uses builder pattern
@@ -1707,7 +1742,8 @@ class OrderFacade {
       {
         id: 35,
         text: "Why is the Singleton pattern tricky in a multi-threaded environment?",
-        answer: "The problem is **lazy initialization without synchronization**. If two threads simultaneously check `instance == null` and both find it null, they'll both create a new instance — you get two singletons. Naive synchronization (making the whole `getInstance()` synchronized) works but creates a performance bottleneck since every call acquires the lock even after initialization. **Double-checked locking** with `volatile` is the classic fix. But the cleanest solutions are: **enum singleton** (thread-safe by JVM spec, free) or just **rely on Spring's singleton scope** (Spring manages the single instance, you never write this boilerplate).",
+        answer:
+            "The problem is **lazy initialization without synchronization**. If two threads simultaneously check `instance == null` and both find it null, they'll both create a new instance — you get two singletons.\n\nNaive synchronization (making the whole \`getInstance()\` synchronized) works but creates a performance bottleneck since every call acquires the lock even after initialization. **Double-checked locking** with \`volatile\` is the classic fix.\n\nBut the cleanest solutions are: **enum singleton** (thread-safe by JVM spec, free) or just **rely on Spring's singleton scope** (Spring manages the single instance, you never write this boilerplate).",
         explanation: `**The broken lazy singleton — the classic interview question:**
 
 \`\`\`java
@@ -3980,6 +4016,17 @@ public class UserRestController {
     ],
   },
 ];
+
+// Enrich follow-ups with their answers, keyed by exact text.
+categories.forEach((cat) =>
+  cat.questions.forEach((q) =>
+    q.followUps.forEach((fu) => {
+      if (!fu.answer && followupAnswers[fu.text]) {
+        fu.answer = followupAnswers[fu.text];
+      }
+    })
+  )
+);
 
 export function getCategoryById(id: string): Category | undefined {
   return categories.find((c) => c.id === id);

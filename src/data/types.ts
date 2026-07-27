@@ -1,5 +1,6 @@
 export interface FollowUp {
   text: string;
+  answer?: string;
 }
 
 export interface Question {

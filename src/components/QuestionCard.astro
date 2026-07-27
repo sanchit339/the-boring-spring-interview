@@ -93,6 +93,11 @@ async function renderContent(text: string): Promise<string> {
 // Pre-render content at build time
 const renderedAnswer = question.answer ? await renderContent(question.answer) : "";
 const renderedExplanation = question.explanation ? await renderContent(question.explanation) : "";
+
+// Pre-render follow-up answers (template callbacks can't be async)
+const renderedFollowUpAnswers = await Promise.all(
+  question.followUps.map((fu) => (fu.answer ? renderContent(fu.answer) : ""))
+);
 ---
 
 <article class="question" id={`q-${question.id}`}>
@@ -183,10 +188,18 @@ const renderedExplanation = question.explanation ? await renderContent(question.
                 <span class="followup-marker" aria-hidden="true">
                   {i + 1}
                 </span>
-                <span
-                  class="followup-text"
-                  set:html={renderText(fu.text)}
-                />
+                <div class="followup-body">
+                  <span
+                    class="followup-text"
+                    set:html={renderText(fu.text)}
+                  />
+                  {fu.answer && (
+                    <div
+                      class="followup-answer prose"
+                      set:html={renderedFollowUpAnswers[i]}
+                    />
+                  )}
+                </div>
               </li>
             ))}
           </ol>
@@ -393,9 +406,21 @@ const renderedExplanation = question.explanation ? await renderContent(question.
 
   /* Shiki token spans — remove any interference */
   .explanation-text :global(pre.shiki-block .line),
-  .answer-text :global(pre.shiki-block .line) {
+  .answer-text :global(pre.shiki-block .line),
+  .followup-answer :global(pre.shiki-block .line) {
     display: block;
-    min-height: 1.65em;
+  }
+
+  /* Collapse blank lines within code blocks (Shiki renders them as empty .line spans) */
+  .explanation-text :global(pre.shiki-block .line:empty),
+  .answer-text :global(pre.shiki-block .line:empty),
+  .followup-answer :global(pre.shiki-block .line:empty) {
+    height: 0;
+    min-height: 0 !important;
+    margin: 0;
+    padding: 0;
+    line-height: 0;
+    overflow: hidden;
   }
 
   /* ── Follow-ups ── */
@@ -492,6 +517,29 @@ const renderedExplanation = question.explanation ? await renderContent(question.
 
   .followup-text :global(code) {
     font-size: 0.9em;
+  }
+
+  .followup-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .followup-answer {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--color-ink-muted);
+    padding-top: var(--space-xs);
+  }
+
+  .followup-answer :global(code) {
+    font-size: 0.9em;
+  }
+
+  .followup-answer :global(pre) {
+    margin: var(--space-xs) 0;
   }
 
   .followup-hint {
