@@ -53,9 +53,11 @@ async function renderContent(text: string): Promise<string> {
     });
 
     // Wrap shiki output with our code-block container class
+    // Shiki emits <pre class="shiki dark-plus" ...> — merge shiki-block into it
+    // to avoid a duplicate class attribute (browsers drop one, breaking styles).
     const wrapped = highlighted.replace(
-      /^<pre /,
-      '<pre class="shiki-block" '
+      /<pre class="([^"]*)"/,
+      '<pre class="shiki-block $1"'
     );
 
     out = out.replace(`\x00CODEBLOCK_${i}\x00`, wrapped);

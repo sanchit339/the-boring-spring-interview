@@ -3143,6 +3143,22 @@ public class UserRestController {
       {
         id: 69,
         text: "Explain the request flow in Spring MVC (DispatcherServlet, HandlerMapping, etc.).",
+        answer: "Every HTTP request hits a single **`DispatcherServlet`** (Spring's front controller), which asks **`HandlerMapping`** to find the controller method for the URL, uses a **`HandlerAdapter`** to invoke that method, binds parameters, runs the business logic, then resolves the return value into a response — JSON for `@RestController`, a view for `@Controller`. `HandlerInterceptor`s run around the handler, and `@ExceptionHandler`s catch anything thrown. The key idea is **one servlet dispatches everything**, so routing, validation, and exception handling stay centralized instead of living in each controller.",
+        explanation: `\`\`\`java
+// The full chain for: GET /api/users/42 on an @RestController
+// 1. Filter chain (Spring Security, CORS) runs FIRST
+// 2. DispatcherServlet.doDispatch() takes over
+DispatcherServlet
+  -> HandlerMapping          // finds getUser(Long id) at GET /api/users/{id}
+  -> HandlerInterceptor[]    // preHandle() — auth/logging checks
+  -> HandlerAdapter          // invokes the controller method
+  -> Controller.getUser(42)  // @PathVariable bound, business logic runs
+  -> HandlerInterceptor[]    // postHandle()
+  -> HttpMessageConverter    // Jackson serializes UserDto -> JSON
+  -> HttpServletResponse     // 200 OK + JSON body
+\`\`\`
+
+**Where it shows up:** when a request returns the wrong status or content type, 90% of the time the fix lives in this chain — a missing converter, a filter ordering issue, or an interceptor short-circuiting the response. Knowing the order tells you *where* to put a breakpoint.`,
         followUps: [
           { text: "What is the Front Controller pattern, and how does DispatcherServlet implement it?" },
           { text: "What roles do HandlerAdapter, ViewResolver, and interceptors play?" },
@@ -3152,6 +3168,26 @@ public class UserRestController {
       {
         id: 70,
         text: "What is `@RequestMapping`, and how do `@GetMapping`, `@PostMapping`, etc. differ from it?",
+        answer: "**`@RequestMapping`** is the generic mapping annotation — without a `method` it matches **every HTTP verb** on the given path, which is almost never what you want. **`@GetMapping`**, **`@PostMapping`**, `@PutMapping`, `@PatchMapping`, `@DeleteMapping` are shorthand composed annotations that pin the request to one specific HTTP method, so the intent reads at a glance and you don't accidentally handle a DELETE on what should be a GET-only endpoint. Use the composed shortcuts for every handler; reserve raw `@RequestMapping` for **class-level base paths**.",
+        explanation: `\`\`\`java
+// WITHOUT narrowed mapping — handles GET, POST, PUT, DELETE... all of them
+@RequestMapping("/users")
+public List<User> getUsers() { ... }   // a DELETE to /users also lands here — dangerous
+\`\`\`
+
+\`\`\`java
+// GOOD — composed annotations lock the HTTP method explicitly
+@RestController
+@RequestMapping("/api/users")   // class-level base path, no method = fine here
+public class UserController {
+    @GetMapping("/{id}")    // GET only
+    @PostMapping            // POST only
+    @PutMapping("/{id}")    // PUT only
+    @DeleteMapping("/{id}") // DELETE only
+}
+\`\`\`
+
+\`@GetMapping\` is literally \`@RequestMapping(method = GET)\` under the hood — it's pure sugar, but the sugar is what stops you from exposing unintended verbs. In a code review, a bare \`@RequestMapping("/x")\` on a method is an automatic flag.`,
         followUps: [
           { text: "Can you put `@RequestMapping` on a class for a base path?" },
           { text: "How do you map multiple paths or HTTP methods on one method?" },
@@ -3161,6 +3197,27 @@ public class UserRestController {
       {
         id: 71,
         text: "What is the difference between `@PathVariable` and `@RequestParam`?",
+        answer: "**`@PathVariable`** pulls a value **out of the URL path** — `/users/{id}` → `@PathVariable Long id` — so the variable is part of the resource identifier itself. **`@RequestParam`** pulls a value **from the query string** — `/users?role=ADMIN` → `@RequestParam String role` — used for filtering, sorting, and optional options. Rule of thumb: if it identifies *which* resource, it's a path variable; if it modifies *how* you fetch the collection, it's a request param. Path variables are required by nature; request params can be optional with defaults.",
+        explanation: `\`\`\`java
+@RestController
+@RequestMapping("/users")
+public class UserController {
+
+    // @PathVariable — value embedded IN the path
+    // GET /users/42
+    @GetMapping("/{id}")
+    public User getUser(@PathVariable Long id) { ... }   // id = 42
+
+    // @RequestParam — value in the QUERY STRING, optional + defaultable
+    // GET /users?role=ADMIN&page=2
+    @GetMapping
+    public List<User> list(
+        @RequestParam(required = false) String role,
+        @RequestParam(defaultValue = "0") int page) { ... }
+}
+\`\`\`
+
+**Trap:** \`/users/{id}\` with \`id = "42"\` works, but a free-text value with slashes (\`/users/a/b\`) breaks the path match entirely — push messy or optional values into \`@RequestParam\`, not the path. Encoded slashes (\`%2F\`) are rejected by Tomcat by default.`,
         followUps: [
           { text: "When is a request param required vs optional, and how do you set defaults?" },
           { text: "How do you bind multiple query params into an object?" },
@@ -3170,6 +3227,25 @@ public class UserRestController {
       {
         id: 72,
         text: "What is `@RequestBody` and `@ResponseBody` used for?",
+        answer: "**`@ResponseBody`** tells Spring to write the method's return value **straight into the HTTP response body** by serializing it (to JSON via Jackson) instead of treating it as a view name. **`@RequestBody`** does the reverse — it takes the **incoming request body** and deserializes it into a Java object before the method runs. In practice you rarely write either by hand: `@RestController` bakes `@ResponseBody` onto every method, and you just add `@RequestBody` to the DTO parameter of a POST/PUT.",
+        explanation: `\`\`\`java
+// @RequestBody — deserialize the INCOMING JSON into a Java object
+// @ResponseBody — serialize the RETURN object into JSON (implicit on @RestController)
+
+@RestController
+@RequestMapping("/orders")
+public class OrderController {
+
+    @PostMapping
+    public OrderDto create(@RequestBody @Valid CreateOrderRequest req) {
+        // Jackson converts {"itemId":7,"qty":2} -> CreateOrderRequest
+        OrderDto saved = orderService.create(req);
+        return saved; // Jackson converts OrderDto -> JSON response body
+    }
+}
+\`\`\`
+
+Both conversions run through an **\`HttpMessageConverter\`** — \`MappingJackson2HttpMessageConverter\` for JSON. The classic mistake is using plain \`@Controller\` for a JSON endpoint and forgetting \`@ResponseBody\`: Spring then treats the returned String as a **view name** and 404s looking for a template. \`@RestController\` exists so you can't make that error.`,
         followUps: [
           { text: "Which HttpMessageConverter handles JSON by default (Jackson)?" },
           { text: "How does `@RestController` relate to `@ResponseBody`?" },
@@ -3179,6 +3255,33 @@ public class UserRestController {
       {
         id: 73,
         text: "How do you handle validation of request payloads in Spring Boot (`@Valid`, `@Validated`)?",
+        answer: "You annotate the **DTO fields** with Bean Validation constraints (`@NotBlank`, `@Email`, `@Size`, `@Min`), then add **`@Valid`** next to the `@RequestBody` parameter so Spring validates the object **before** the method runs — violations throw `MethodArgumentNotValidException`, which Spring maps to a **400 Bad Request**. **`@Validated`** is Spring's extended version that also enables **validation groups** (validate differently on create vs update) and method-level parameter validation. Use `@Valid` for the common case; reach for `@Validated` only when you need partial/grouped validation.",
+        explanation: `\`\`\`java
+// WRONG — no validation, garbage data hits your service/DB
+public Order create(@RequestBody CreateOrderRequest req) {
+    orderService.save(req); // req.email could be null or ""
+}
+\`\`\`
+
+\`\`\`java
+// GOOD — constraints on the DTO, @Valid triggers them at binding time
+public record CreateOrderRequest(
+    @NotBlank String email,            // cannot be null or blank
+    @Min(1) int quantity,              // must be >= 1
+    @Size(max = 500) String note       // capped length
+) {}
+
+@RestController
+public class OrderController {
+    @PostMapping("/orders")
+    public Order create(@RequestBody @Valid CreateOrderRequest req) {
+        // reaches here ONLY if all constraints pass; otherwise 400
+        return orderService.create(req);
+    }
+}
+\`\`\`
+
+**Production note:** catch \`MethodArgumentNotValidException\` in a \`@RestControllerAdvice\` and return a **structured 400** with field-level errors — Spring's default gives a bare "Bad Request" that tells the client nothing about *which* field failed.`,
         followUps: [
           { text: "What is the difference between `@Valid` and `@Validated` (groups)?" },
           { text: "Where do you put constraint annotations — DTO fields or custom validators?" },
@@ -3188,6 +3291,39 @@ public class UserRestController {
       {
         id: 74,
         text: "How do you implement global exception handling (`@ControllerAdvice`, `@ExceptionHandler`)?",
+        answer: "**`@ExceptionHandler`** goes inside a controller and catches specific exception types thrown by that controller's methods, converting them into an HTTP response. **`@ControllerAdvice`** lifts that to **application-wide** — a single class whose `@ExceptionHandler` methods catch exceptions from *every* controller, giving you one consistent error-response shape. For REST APIs you use **`@RestControllerAdvice`** (it's `@ControllerAdvice` + `@ResponseBody`) so error bodies serialize to JSON automatically. This centralizes the mapping of domain exceptions (`UserNotFoundException`) to HTTP statuses (404).",
+        explanation: `\`\`\`java
+// WITHOUT global handling — every controller repeats try/catch, inconsistent errors
+@PostMapping("/users")
+public User create(@RequestBody User u) {
+    try {
+        return service.create(u);
+    } catch (DuplicateEmailException e) {
+        // hand-built response, copy-pasted everywhere
+        return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
+    }
+}
+\`\`\`
+
+\`\`\`java
+// GOOD — one @RestControllerAdvice handles it app-wide
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ErrorResponse> notFound(UserNotFoundException ex) {
+        return ResponseEntity.status(404)
+            .body(new ErrorResponse("USER_NOT_FOUND", ex.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> validation(MethodArgumentNotValidException ex) {
+        return ResponseEntity.status(400).body(...); // structured field errors
+    }
+}
+\`\`\`
+
+This is how production APIs keep error responses **uniform** — every endpoint returns the same \`{code, message, ...}\` shape instead of each controller inventing its own. It also keeps controllers free of try/catch noise.`,
         followUps: [
           { text: "What is the difference between `@ControllerAdvice` and `@RestControllerAdvice`?" },
           { text: "How do you map domain exceptions to HTTP status codes?" },
@@ -3197,6 +3333,23 @@ public class UserRestController {
       {
         id: 75,
         text: "What HTTP status codes are commonly used, and how do you return custom status codes from a controller?",
+        answer: "The core set: **200 OK** (success), **201 Created** (new resource, with a `Location` header), **204 No Content** (success, empty body), **400 Bad Request** (client sent garbage/validation failure), **401 Unauthorized** (not logged in), **403 Forbidden** (logged in but no permission), **404 Not Found**, **409 Conflict** (duplicate), **500 Internal Server Error** (your bug). You return a custom status two ways: **`ResponseEntity.status(code).body(obj)`** for dynamic runtime control, or **`@ResponseStatus(code)`** for a fixed status on a method or exception class.",
+        explanation: `\`\`\`java
+// ResponseEntity — status decided at RUNTIME, can vary per branch
+@PostMapping("/users")
+public ResponseEntity<User> create(@RequestBody @Valid CreateUserRequest req) {
+    User saved = userService.create(req);
+    URI location = URI.create("/users/" + saved.getId());
+    return ResponseEntity.created(location).body(saved); // 201 + Location header
+}
+
+// @ResponseStatus — FIXED status, good for exception -> status mapping
+@ResponseStatus(HttpStatus.NOT_FOUND)
+public class UserNotFoundException extends RuntimeException { ... }
+// throwing it anywhere now returns 404 automatically
+\`\`\`
+
+**Two traps:** (1) returning **200 for a create** is wrong — it should be **201** with a \`Location\` header so the client knows where the new resource lives. (2) **401 vs 403** are misnamed: 401 really means *unauthenticated* ("who are you?"), 403 means *authenticated but not allowed* ("I know you, and no"). Getting these backwards breaks client re-login flows.`,
         followUps: [
           { text: "When would you return 201 Created vs 200 OK?" },
           { text: "What is the difference between 401 and 403?" },
@@ -3206,6 +3359,30 @@ public class UserRestController {
       {
         id: 76,
         text: "What is `ResponseEntity`, and when would you use it?",
+        answer: "**`ResponseEntity<T>`** is a Spring wrapper that lets a controller method set the **HTTP status code, headers, and body together** as the return value, instead of just returning a DTO. You use it whenever the response needs a **non-200 status** (201 Created, 409 Conflict), **custom headers** (`Location`, `ETag`, `X-Total-Count`), or conditional logic that picks the status at runtime. For a plain successful GET that always returns 200 with a body, returning the DTO directly is enough — don't wrap everything in `ResponseEntity` for no reason.",
+        explanation: `\`\`\`java
+// OVERKILL — simple 200 GET doesn't need ResponseEntity
+@GetMapping("/{id}")
+public ResponseEntity<User> get(@PathVariable Long id) {
+    return ResponseEntity.ok(userService.findById(id));
+}
+// Just return the DTO:  public User get(@PathVariable Long id) { return ...; }
+\`\`\`
+
+\`\`\`java
+// ResponseEntity EARNS its place — needs status + header + body
+@PostMapping
+public ResponseEntity<User> create(@RequestBody @Valid CreateUserRequest req) {
+    User saved = userService.create(req);
+    URI location = URI.create("/users/" + saved.getId());
+    return ResponseEntity
+        .created(location)              // 201 Created
+        .header("X-Created-By", "web")  // custom header
+        .body(saved);                   // response body
+}
+\`\`\`
+
+The builder API (\`ResponseEntity.status(409).header(...).body(...)\`, plus shortcuts \`.ok\`, \`.created\`, \`.noContent().build()\`) reads top-down and lets you omit any leg you don't need. Use it when status/headers/conditional behavior matter; use a bare DTO return when they don't.`,
         followUps: [
           { text: "How do you set custom headers with ResponseEntity?" },
           { text: "When is returning a DTO directly (with `@RestController`) enough?" },
@@ -3215,6 +3392,25 @@ public class UserRestController {
       {
         id: 77,
         text: "How do you version REST APIs?",
+        answer: "The common strategies are **URI versioning** (`/v1/users`), **header versioning** (`Accept: application/vnd.app.v2+json` or a custom `X-API-Version`), and **query-param versioning** (`/users?version=2`). URI versioning is the most widely used — it's **explicit, cacheable, and easy to route and document**, at the cost of cluttering the URL. Header versioning keeps URLs clean but is invisible in browsers and harder to test. The job of versioning is to let you ship **breaking changes** without nuking existing clients, and to let you **deprecate the old version** on a timeline instead of cutting it off.",
+        explanation: `\`\`\`java
+// URI versioning — most common, explicit, trivial to route
+@RestController
+@RequestMapping("/api/v1/users")
+public class UserV1Controller { ... }
+
+@RestController
+@RequestMapping("/api/v2/users")
+public class UserV2Controller { ... } // breaking change lives here, v1 keeps working
+\`\`\`
+
+\`\`\`java
+// Header versioning — clean URLs, but invisible + harder to test/curl
+@GetMapping(value = "/users", headers = "X-API-Version=2")
+public UserV2 getUserV2() { ... }
+\`\`\`
+
+**Deprecation matters more than the strategy:** when you ship v2, keep v1 alive, add a **\`Deprecation\`** and **\`Sunset\`** header to its responses, document a migration path with a real shutdown date, and monitor traffic — only retire v1 once usage is near zero. Never hard-cut a public version; clients you don't control will break. Most teams default to URI versioning because its discoverability and caching outweigh the URL clutter.`,
         followUps: [
           { text: "Compare URI versioning (`/v1/users`) vs header versioning." },
           { text: "How do you deprecate an old API version safely?" },
@@ -3224,6 +3420,24 @@ public class UserRestController {
       {
         id: 78,
         text: "What is HATEOAS?",
+        answer: "**HATEOAS** (Hypermedia As The Engine Of Application State) means a REST response includes **hypermedia links** that tell the client what actions are available next — a `GET /orders/42` response carries `_links` like `self`, `cancel`, `payment`, so the client navigates by following links instead of hard-coding URLs. The server drives the state machine by advertising valid transitions, so clients stay decoupled from your URL scheme. It's a **level of REST maturity** (Richardson level 3), and in practice most APIs skip full HATEOAS because it adds payload overhead and clients usually hard-code URLs anyway.",
+        explanation: `\`\`\`json
+// A HATEOAS response — data + links to valid next actions
+{
+  "id": 42,
+  "status": "PENDING",
+  "total": 99.99,
+  "_links": {
+    "self":   { "href": "/orders/42" },
+    "cancel": { "href": "/orders/42/cancel", "method": "POST" },
+    "pay":    { "href": "/orders/42/payment",  "method": "POST" }
+  }
+}
+// Notice the 'cancel' link only appears because status is PENDING —
+// the server controls what the client can do next based on state.
+\`\`\`
+
+In Spring you build these with **Spring HATEOAS** (\`EntityModel\`, \`WebMvcLinkBuilder\`): \`linkTo(methodOn(OrderController.class).cancel(id)).withRel("cancel")\`. It's worth the complexity for **public, discoverable APIs** where you want to evolve URLs without breaking clients. For internal microservices where one team owns both sides, hand-coded links (or none) are simpler — the boilerplate rarely pays off.`,
         followUps: [
           { text: "What does \"hypermedia as the engine of application state\" mean in practice?" },
           { text: "Have you used Spring HATEOAS? When is it worth the complexity?" },
@@ -3233,6 +3447,30 @@ public class UserRestController {
       {
         id: 79,
         text: "How do you handle CORS in a Spring Boot application?",
+        answer: "**CORS** (Cross-Origin Resource Sharing) is the browser's security mechanism that blocks a web page from calling an API on a different origin unless the API **explicitly allows it** via `Access-Control-Allow-*` response headers. In Spring Boot you enable it three ways: **`@CrossOrigin`** on a single controller/method, **global CORS** via `WebMvcConfigurer.addCorsMappings()`, or — if **Spring Security** is present — inside the `SecurityFilterChain` with `http.cors(...)`. The critical gotcha: when Spring Security is on the classpath, it owns the filter chain and **overrides the MVC CORS config**, so you must configure CORS in security or it silently breaks in production.",
+        explanation: `\`\`\`java
+// Per-controller — quick for one endpoint
+@CrossOrigin(origins = "https://app.example.com")
+@GetMapping("/users/{id}")
+public User getUser(@PathVariable Long id) { ... }
+\`\`\`
+
+\`\`\`java
+// Global — one place, applies app-wide
+@Configuration
+public class CorsConfig implements WebMvcConfigurer {
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/api/**")
+            .allowedOrigins("https://app.example.com")
+            .allowedMethods("GET", "POST", "PUT", "DELETE")
+            .allowedHeaders("*")
+            .allowCredentials(true);
+    }
+}
+\`\`\`
+
+**The trap that bites in prod:** with Spring Security on the classpath, the MVC config above is **ignored** — you must wire a \`CorsConfigurationSource\` bean and call \`http.cors(Customizer.withDefaults())\` inside \`SecurityFilterChain\`. Forgetting this is the #1 cause of "CORS works locally, breaks deployed." Also remember browsers send an **OPTIONS preflight** before non-simple requests, so your CORS config must allow OPTIONS, not just the real verb.`,
         followUps: [
           { text: "What is a preflight request, and which HTTP method is used?" },
           { text: "How do `@CrossOrigin`, global CORS config, and Security CORS differ?" },
@@ -3242,6 +3480,19 @@ public class UserRestController {
       {
         id: 80,
         text: "What is content negotiation in Spring MVC?",
+        answer: "**Content negotiation** is how Spring decides the **response format** (JSON, XML, etc.) based on what the client asks for — primarily the **`Accept`** request header — and, on the input side, how it reads the request body based on **`Content-Type`**. The client sends `Accept: application/xml`, Spring picks the `HttpMessageConverter` that produces XML, serializes the response, and if no converter can satisfy the requested type it returns **406 Not Acceptable**. Most REST APIs just default to JSON and ignore this, but it's the mechanism behind serving the same endpoint in multiple formats.",
+        explanation: `\`\`\`java
+// Same endpoint, different response format based on the Accept header
+@GetMapping(value = "/users/{id}", produces = {"application/json", "application/xml"})
+public User getUser(@PathVariable Long id) {
+    return userService.findById(id); // same object, converter picks format
+}
+// Accept: application/json  -> Jackson JSON converter
+// Accept: application/xml   -> Jackson XML converter (needs jackson-dataformat-xml)
+// Accept: text/csv          -> 406 Not Acceptable (no matching converter)
+\`\`\`
+
+\`consumes\` does the mirror for the **request** — \`@PostMapping(consumes = "application/json")\` rejects a non-JSON body with **415 Unsupported Media Type**. Historically Spring also supported path-extension (\`/users.json\`) and query-param (\`?format=xml\`) negotiation, but **path-extension is deprecated** for security (RFD attacks) and off by default. The modern, safe approach is **\`Accept\` header only**.`,
         followUps: [
           { text: "How does the `Accept` header influence response format?" },
           { text: "How can path extensions or query params participate in negotiation?" },
@@ -3251,6 +3502,31 @@ public class UserRestController {
       {
         id: 81,
         text: "How do you document REST APIs (Swagger/OpenAPI)?",
+        answer: "You document REST APIs with **OpenAPI 3** (the current standard, formerly Swagger), and in Spring Boot you integrate it via **`springdoc-openapi`**, which auto-generates an OpenAPI spec at `/v3/api-docs` and a **Swagger UI** at `/swagger-ui.html` by introspecting your `@RestController` classes — zero config. You enrich it with annotations like `@Operation`, `@ApiResponse`, and `@Schema` to describe endpoints, parameters, and DTO fields. This gives clients live, interactive docs and a machine-readable contract without hand-writing a spec.",
+        explanation: `\`\`\`java
+// springdoc-openapi picks this up automatically; annotations add detail
+@Operation(summary = "Get user by ID", description = "Returns a single user")
+@ApiResponses({
+    @ApiResponse(responseCode = "200", description = "User found"),
+    @ApiResponse(responseCode = "404", description = "User not found")
+})
+@GetMapping("/users/{id}")
+public User getUser(
+    @Parameter(description = "User ID") @PathVariable Long id) {
+    return userService.findById(id);
+}
+\`\`\`
+
+\`\`\`xml
+<!-- Spring Boot 3: add this dependency, that's the whole setup -->
+<dependency>
+    <groupId>org.springdoc</groupId>
+    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+    <version>2.5.0</version>
+</dependency>
+\`\`\`
+
+**Naming note:** Swagger was the original spec (2.0); it was donated to the Linux Foundation and renamed **OpenAPI**, with OpenAPI 3 as the successor. "Swagger UI" survives as the viewer, but the spec you author today is OpenAPI 3. The older **springfox** library is unmaintained and doesn't support Spring Boot 3 — use **springdoc**. In production, lock down or remove the UI so you don't hand attackers a map of every endpoint.`,
         followUps: [
           { text: "What is the difference between Swagger and OpenAPI 3?" },
           { text: "How do you integrate springdoc-openapi with Spring Boot?" },
@@ -3260,6 +3536,28 @@ public class UserRestController {
       {
         id: 82,
         text: "What is the difference between PUT, PATCH, and POST?",
+        answer: "**POST** creates a new resource where the **server assigns the ID** (`POST /users` → new user) and is **not idempotent** — repeating it creates duplicates. **PUT** does a **full replacement** of a resource at a known URL (`PUT /users/1` with the whole object) and **is idempotent** — calling it N times leaves the same state. **PATCH** does a **partial update** — you send only the fields that change (`PATCH /users/1` with `{email}`), and it's *not guaranteed* idempotent. The core divider is **idempotency and full-vs-partial**, not just the verb.",
+        explanation: `\`\`\`java
+// POST — server assigns ID, NOT idempotent (repeat = duplicate)
+@PostMapping("/users")
+public User create(@RequestBody CreateUserRequest req) {
+    return userService.create(req); // POST /users twice -> two users
+}
+
+// PUT — full replace at known URL, IDEMPOTENT
+@PutMapping("/users/{id}")
+public User replace(@PathVariable Long id, @RequestBody User fullUser) {
+    return userService.replace(id, fullUser); // omitted fields get cleared
+}
+
+// PATCH — partial update, send only what changed
+@PatchMapping("/users/{id}")
+public User patch(@PathVariable Long id, @RequestBody Map<String, Object> changes) {
+    return userService.partialUpdate(id, changes); // only touched fields change
+}
+\`\`\`
+
+**Two traps:** (1) If you implement PUT as a *partial* update you break its idempotency contract and confuse clients — pick one semantics per endpoint and stick to it. (2) POST isn't *forced* to be non-idempotent: with an **idempotency key** header (Stripe's pattern), a retried POST returns the cached result instead of creating a duplicate, which is how you make payment endpoints safe to retry.`,
         followUps: [
           { text: "Which methods are idempotent, and why does that matter?" },
           { text: "When would you use PUT for full replace vs PATCH for partial update?" },
@@ -3269,6 +3567,22 @@ public class UserRestController {
       {
         id: 83,
         text: "How do you implement pagination and sorting in a REST API?",
+        answer: "You expose pagination through **query parameters** — `?page=0&size=20&sort=createdAt,desc` — and in Spring Boot you accept a **`Pageable`** parameter in the controller, which Spring binds automatically from those params and passes straight to `repository.findAll(pageable)`, returning a **`Page<T>`** with the content, total element count, total pages, and current page info. The response should include the **content array plus totalElements and page metadata** so the client can render \"page 3 of 12\" and build navigation. The non-negotiable rule: **never expose an unbounded list endpoint** — always cap the page size so a `?size=1000000` can't OOM your DB.",
+        explanation: `\`\`\`java
+// WRONG — unbounded SELECT *, will OOM on a big table
+@GetMapping("/orders")
+public List<Order> all() { return orderRepo.findAll(); }
+\`\`\`
+
+\`\`\`java
+// GOOD — Pageable binds ?page=0&size=20&sort=createdAt,desc automatically
+@GetMapping("/orders")
+public Page<Order> list(@PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+    return orderRepo.findAll(pageable); // content + totalElements + totalPages
+}
+\`\`\`
+
+\`Page<T>\` serializes to \`{ content: [...], totalElements: 105, totalPages: 6, number: 0, size: 20 }\`. The \`@PageableDefault\` caps the defaults, but you should also **clamp the max size** so a malicious or buggy \`?size=999999\` is rejected — Spring Boot lets you set \`spring.data.web.pageable.max-page-size\`. For large exports that clients paginate through, pair this with a streaming or cursor-based endpoint rather than deep \`page=5000\` offsets, which get slow on most DBs.`,
         followUps: [
           { text: "How does Spring Data's `Pageable` integrate with controllers?" },
           { text: "What should a paginated response include (content, total, page, size)?" },
@@ -3287,6 +3601,37 @@ public class UserRestController {
       {
         id: 84,
         text: "What is Spring Data JPA, and how does it simplify database access?",
+        answer:
+          "Spring Data JPA is a Spring abstraction layer over JPA that **generates repository implementations at startup** from interfaces you declare — no DAO boilerplate. You extend `JpaRepository<User, Long>` and get `save`, `findById`, `findAll`, pagination, sorting, and derived query methods for free.",
+        explanation: `The pain without it is real. Plain JPA looks like this:
+
+\`\`\`java
+// WITHOUT Spring Data JPA — every DAO is 50+ lines like this
+public class UserDao {
+    @PersistenceContext
+    private EntityManager em;
+
+    public User findById(Long id) {
+        return em.find(User.class, id); // manual
+    }
+
+    public void save(User user) {
+        em.persist(user); // manage transaction manually
+    }
+}
+\`\`\`
+
+With Spring Data JPA, that entire class is replaced by:
+
+\`\`\`java
+// Spring generates the implementation at startup via JDK proxy
+public interface UserRepository extends JpaRepository<User, Long> {
+    // findById, save, findAll, delete — all already there
+    Optional<User> findByEmail(String email); // derived query — no SQL needed
+}
+\`\`\`
+
+**Production context:** In a real service you get 80% of your DB access needs from the interface alone. The generated proxy delegates to \`SimpleJpaRepository\`, which wraps \`EntityManager\` internally. You still drop to \`@Query\` or \`EntityManager\` for complex joins or bulk operations — Spring Data doesn't replace SQL, it eliminates the scaffolding around it.`,
         followUps: [
           { text: "What boilerplate does it remove compared to plain JPA EntityManager code?" },
           { text: "How do repository interfaces get implemented at runtime?" },
@@ -3296,6 +3641,30 @@ public class UserRestController {
       {
         id: 85,
         text: "What is the difference between JPA, Hibernate, and Spring Data JPA?",
+        answer:
+          "**JPA** is a specification (`jakarta.persistence.*`) — an interface contract for ORM in Java, not an implementation. **Hibernate** is the most popular *implementation* of JPA, providing the actual SQL generation, session management, and caching. **Spring Data JPA** sits on top and auto-generates repository implementations that drive Hibernate through the JPA API. Remove any one layer and the stack changes: JPA without Hibernate means finding another provider; without Spring Data JPA you write DAOs manually.",
+        explanation: `Think of it as three layers:
+
+\`\`\`
+Your Code
+    ↓
+Spring Data JPA   ← generates repos, handles transactions, derives queries
+    ↓
+JPA API           ← standard interfaces: EntityManager, @Entity, JPQL
+    ↓
+Hibernate         ← implements JPA: translates JPQL → SQL, manages sessions
+    ↓
+JDBC / DB Driver  ← actual DB connection
+    ↓
+Database
+\`\`\`
+
+A real example: you call \`userRepository.findByEmail(email)\`.
+- Spring Data JPA parses the method name and builds a JPQL query
+- JPA's \`EntityManager.createQuery()\` is invoked with that JPQL
+- Hibernate translates it to \`SELECT * FROM users WHERE email = ?\` and fires it via JDBC
+
+**The vendor lock-in question comes up in interviews:** If you stick to standard JPA annotations (\`@Entity\`, \`@OneToMany\`) and avoid Hibernate-specific extensions (\`@BatchSize\`, \`@Cache\`), you could theoretically swap Hibernate for EclipseLink. Nobody does this in practice, but understanding the layer separation matters when you read docs and trace bugs.`,
         followUps: [
           { text: "Is Hibernate a JPA implementation or a separate API?" },
           { text: "Can you use Hibernate features that are not in the JPA standard?" },
@@ -3305,6 +3674,34 @@ public class UserRestController {
       {
         id: 86,
         text: "What is the difference between `JpaRepository`, `CrudRepository`, and `PagingAndSortingRepository`?",
+        answer:
+          "`CrudRepository` provides the 7 core CRUD methods. `PagingAndSortingRepository` extends it with `findAll(Pageable)` and `findAll(Sort)`. `JpaRepository` extends both and adds JPA-specific methods: `flush`, `saveAndFlush`, batch deletes, and — crucially — returns `List<T>` instead of `Iterable<T>`. Always extend `JpaRepository` in production; you'll eventually need pagination or flush control and retrofitting costs refactors.",
+        explanation: `The hierarchy:
+
+\`\`\`
+CrudRepository          → save, findById, findAll (Iterable), delete, count
+    ↑
+PagingAndSortingRepository → + findAll(Pageable), findAll(Sort)
+    ↑
+JpaRepository           → + saveAll, flush, saveAndFlush, deleteInBatch,
+                            deleteAllInBatch, getById — and findAll returns List<T>
+\`\`\`
+
+The \`Iterable<T>\` vs \`List<T>\` difference is the most annoying in practice:
+
+\`\`\`java
+// CrudRepository — you get Iterable, can't call .size() or .get(0)
+Iterable<User> users = userRepo.findAll();
+users.forEach(...); // only this
+
+// JpaRepository — you get List, immediately usable
+List<User> users = userRepo.findAll();
+users.size();      // works
+users.get(0);      // works
+users.stream()...  // works
+\`\`\`
+
+**The production warning:** \`JpaRepository\` exposes \`deleteAll()\` and \`deleteAllInBatch()\` as public methods. Those wipe the entire table. Never expose them through a service interface without an explicit admin guard. Restrict at the service layer — don't count on callers being careful.`,
         followUps: [
           { text: "Which methods does each interface add?" },
           { text: "Why is `JpaRepository` the most common choice?" },
@@ -3314,6 +3711,32 @@ public class UserRestController {
       {
         id: 87,
         text: "How do you write custom queries using `@Query`?",
+        answer:
+          "`@Query` lets you write JPQL (or native SQL) directly on a repository method when derived query names become unreadable or the query requires JOINs, subqueries, or aggregations that Spring can't derive from a method name. Annotate `@Modifying` + `@Transactional` for any DML query — without both, updates and deletes throw at runtime.",
+        explanation: `\`\`\`java
+public interface OrderRepository extends JpaRepository<Order, Long> {
+
+    // JPQL — references entity class name and field names, not table/column
+    @Query("SELECT o FROM Order o WHERE o.user.id = :userId AND o.status = :status")
+    List<Order> findByUserAndStatus(
+        @Param("userId") Long userId,
+        @Param("status") OrderStatus status
+    );
+
+    // Native SQL — raw SQL, ties you to schema column names
+    @Query(value = "SELECT * FROM orders WHERE created_at > NOW() - INTERVAL '7 days'",
+           nativeQuery = true)
+    List<Order> findLastWeek();
+
+    // Modifying query MUST have both @Modifying and @Transactional
+    @Modifying
+    @Transactional
+    @Query("UPDATE Order o SET o.status = :status WHERE o.id = :id")
+    int updateStatus(@Param("id") Long id, @Param("status") OrderStatus status);
+}
+\`\`\`
+
+**The stale cache trap:** After a \`@Modifying\` bulk UPDATE, the first-level cache (session cache) still holds the old entity state. Add \`@Modifying(clearAutomatically = true)\` so Hibernate evicts cached entities after the update — otherwise \`findById\` in the same transaction returns the old value from cache, not the updated DB value. This bites people in tests constantly.`,
         followUps: [
           { text: "What is the difference between JPQL and native SQL in `@Query`?" },
           { text: "How do you use named parameters vs positional parameters?" },
@@ -3323,6 +3746,35 @@ public class UserRestController {
       {
         id: 88,
         text: "What is the difference between derived query methods and `@Query` annotated methods?",
+        answer:
+          "**Derived methods** have their JPQL generated by Spring from the method name at startup — `findByEmailAndStatus` becomes `WHERE email = ? AND status = ?` automatically. **`@Query` methods** let you write the query explicitly, giving you full JPQL/SQL control. Derived methods win for simple lookups (1-2 conditions); `@Query` wins the moment a join, subquery, or aggregation is involved.",
+        explanation: `Spring's name parser works by stripping the prefix (\`findBy\`, \`existsBy\`, \`countBy\`, \`deleteBy\`) and tokenizing the rest using camelCase boundaries against your entity's field names:
+
+\`\`\`java
+// These are all valid derived method names:
+Optional<User> findByEmail(String email);
+List<User> findByStatusAndDepartmentName(String status, String dept); // dept.name via traversal
+List<Order> findByCreatedAtAfterOrderByTotalDesc(Instant after);
+boolean existsByEmail(String email);
+long countByStatus(OrderStatus status);
+\`\`\`
+
+The trap — when names get ridiculous:
+
+\`\`\`java
+// DON'T — unreadable, fragile, breaks if you rename a field
+List<Order> findByUserEmailAndStatusInAndCreatedAtAfterAndTotalGreaterThanOrderByCreatedAtDesc(
+    String email, List<OrderStatus> statuses, Instant from, BigDecimal minTotal);
+
+// DO — use @Query for anything this complex
+@Query("SELECT o FROM Order o JOIN o.user u " +
+       "WHERE u.email = :email AND o.status IN :statuses " +
+       "AND o.createdAt > :from AND o.total > :minTotal " +
+       "ORDER BY o.createdAt DESC")
+List<Order> findComplexOrders(...);
+\`\`\`
+
+**Key advantage of derived methods:** errors are caught at **startup**, not at runtime. If you typo \`findByEmial\`, Spring fails to start with \`PropertyReferenceException: No property 'emial' found\`. That's a free compile-time-equivalent check.`,
         followUps: [
           { text: "When do derived methods become too complex or ambiguous?" },
           { text: "How does Spring parse method names like `findByEmailAndStatus`?" },
@@ -3332,6 +3784,44 @@ public class UserRestController {
       {
         id: 89,
         text: "What is the N+1 select problem, and how do you solve it?",
+        answer:
+          "N+1 happens when loading a list of N entities triggers N **additional queries** to load their associations — one query to fetch the parent list, then one per row to fetch the child. Load 50 orders and you silently fire 51 queries to the DB instead of 1. The fix depends on the use case: `JOIN FETCH` or `@EntityGraph` for full entity loading, `@BatchSize` for cheap global reduction, DTO projections for read-only endpoints where you only need a subset of fields.",
+        explanation: `The classic scenario: you load orders with their items.
+
+\`\`\`java
+// LAZY is the default on @OneToMany — looks innocent
+List<Order> orders = orderRepo.findAll(); // SELECT * FROM orders (1 query)
+for (Order o : orders) {
+    o.getItems().size(); // SELECT * FROM items WHERE order_id = ? — fires N times!
+}
+// 50 orders = 51 queries total. N+1.
+\`\`\`
+
+Fix 1: \`JOIN FETCH\` in JPQL — one query:
+
+\`\`\`java
+@Query("SELECT DISTINCT o FROM Order o JOIN FETCH o.items")
+List<Order> findAllWithItems();
+// Single query: SELECT o.*, i.* FROM orders o JOIN items i ON i.order_id = o.id
+\`\`\`
+
+Fix 2: \`@EntityGraph\` for cleaner repository signatures:
+
+\`\`\`java
+@EntityGraph(attributePaths = {"items"})
+List<Order> findAll(); // Spring generates the JOIN FETCH for you
+\`\`\`
+
+Fix 3: \`@BatchSize\` — cheapest, no query changes needed:
+
+\`\`\`java
+@OneToMany
+@BatchSize(size = 25) // 50 orders = 2 IN-clause queries instead of 50
+private List<Item> items;
+// Or globally: hibernate.default_batch_fetch_size=25
+\`\`\`
+
+**Detection:** enable \`spring.jpa.show-sql=true\` and count the \`SELECT\` statements in logs. In tests, use Hypersistence Optimizer or assert query count with p6spy. Never discover N+1 in production — it's a perf cliff, not a gradual degradation.`,
         followUps: [
           { text: "How would you detect N+1 in logs or with a tool?" },
           { text: "How do `JOIN FETCH`, `@EntityGraph`, and batch fetching help?" },
@@ -3341,6 +3831,39 @@ public class UserRestController {
       {
         id: 90,
         text: "What is the difference between `FetchType.LAZY` and `FetchType.EAGER`?",
+        answer:
+          "`FetchType.LAZY` tells Hibernate to load the association **only when you access it** — a proxy is placed in the field and the SELECT fires on first access. `FetchType.EAGER` loads the association **immediately with the parent entity**, adding a JOIN (or extra SELECT) to every load whether you need the data or not. Default: `@ManyToOne`/`@OneToOne` are EAGER; `@OneToMany`/`@ManyToMany` are LAZY. You should **override `@ManyToOne` to LAZY** in most cases — EAGER defaults are a performance footgun.",
+        explanation: `The EAGER trap in practice:
+
+\`\`\`java
+@Entity
+public class Order {
+    @ManyToOne(fetch = FetchType.EAGER) // default — dangerous
+    private User user;
+}
+
+// Even this innocent call JOINs the user table:
+Order order = orderRepo.findById(id).get();
+// SQL: SELECT o.*, u.* FROM orders o JOIN users u ON u.id = o.user_id WHERE o.id = ?
+// You just loaded User even though you only wanted the Order's total.
+\`\`\`
+
+Change to LAZY everywhere and load what you need explicitly:
+
+\`\`\`java
+@Entity
+public class Order {
+    @ManyToOne(fetch = FetchType.LAZY) // explicitly lazy
+    private User user;
+}
+
+// Now the JOIN doesn't happen unless you access order.getUser()
+// And if you DO need the user, JOIN FETCH in the query:
+@Query("SELECT o FROM Order o JOIN FETCH o.user WHERE o.id = :id")
+Optional<Order> findWithUser(@Param("id") Long id);
+\`\`\`
+
+**LazyInitializationException:** the price of LAZY is that you get a proxy. Access \`order.getUser().getName()\` outside an open session (after the \`@Transactional\` method returns) and Hibernate throws \`LazyInitializationException\` — the session is closed, it can't issue the SELECT. Solution: load what you need inside the transaction.`,
         followUps: [
           { text: "What is the default fetch type for `@ManyToOne` vs `@OneToMany`?" },
           { text: "What is `LazyInitializationException`, and when does it occur?" },
@@ -3350,6 +3873,47 @@ public class UserRestController {
       {
         id: 91,
         text: "Explain the different types of entity relationships (`@OneToOne`, `@OneToMany`, `@ManyToOne`, `@ManyToMany`).",
+        answer:
+          "`@OneToOne` — one entity maps to exactly one other (User ↔ UserProfile). `@OneToMany` / `@ManyToOne` — one parent has many children, the child holds the FK (Order has many Items; Item has a `@ManyToOne` to Order). `@ManyToMany` — both sides can have multiple of the other, backed by a join table (Student ↔ Course). The **owning side** (the side without `mappedBy`) controls the FK column — always set both sides of a bidirectional relationship or your FK won't be written.",
+        explanation: `The bidirectional “mappedBy” confusion is the #1 relationship mistake:
+
+\`\`\`java
+@Entity
+public class Order {
+    @Id Long id;
+
+    // owning side — no mappedBy, holds the FK in the DB
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private User user;
+
+    // owning side of the one-to-many from Order's perspective
+    @OneToMany(mappedBy = "order", cascade = CascadeType.PERSIST)
+    private List<Item> items = new ArrayList<>();
+}
+
+@Entity
+public class Item {
+    @ManyToOne // owning side — holds the FK order_id
+    @JoinColumn(name = "order_id")
+    private Order order;
+}
+\`\`\`
+
+The mistake people make:
+
+\`\`\`java
+// BAD — only sets the inverse side
+order.getItems().add(item); // sets Order.items list
+// But item.order is null — Hibernate reads the OWNING side to write the FK!
+// Result: order_id is NULL in the DB
+
+// GOOD — always set both sides
+item.setOrder(order);       // owning side — FK is written
+order.getItems().add(item); // inverse side — in-memory consistency
+\`\`\`
+
+**Many-to-many with extra columns:** standard \`@ManyToMany\` can't hold extra columns on the join table. Create an explicit entity (\`StudentCourse\` with \`enrolledAt\`, \`grade\`) with \`@ManyToOne\` to each side instead.`,
         followUps: [
           { text: "What is owning side vs inverse side, and why does `mappedBy` matter?" },
           { text: "How do you model a many-to-many with an intermediate entity (extra columns)?" },
@@ -3359,6 +3923,36 @@ public class UserRestController {
       {
         id: 92,
         text: "What is the Hibernate first-level and second-level cache?",
+        answer:
+          "The **first-level cache** (L1) is the Hibernate session cache — always on, scoped to one `@Transactional` boundary, so within one transaction `findById(1)` called twice hits the DB once. The **second-level cache** (L2) is optional, shared across sessions and app instances, and requires a provider like Ehcache or Redis. L1 is free and automatic; L2 is an explicit performance optimization with staleness trade-offs you need to own.",
+        explanation: `First-level cache — works silently for you:
+
+\`\`\`java
+@Transactional
+public void processOrder(Long id) {
+    Order o1 = orderRepo.findById(id).get(); // SELECT fires
+    Order o2 = orderRepo.findById(id).get(); // returns cached instance, no SELECT
+    System.out.println(o1 == o2); // true — same object reference
+} // session closes, L1 cache cleared
+\`\`\`
+
+Second-level cache — explicit setup:
+
+\`\`\`java
+// 1. application.properties
+// spring.jpa.properties.hibernate.cache.use_second_level_cache=true
+// spring.jpa.properties.hibernate.cache.region.factory_class=org.hibernate.cache.jcache.JCacheRegionFactory
+
+// 2. annotate the entity
+@Entity
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE) // must annotate each entity
+public class Product { ... }
+
+// Now findById(productId) for the same product ID across different sessions
+// hits the L2 cache instead of the DB.
+\`\`\`
+
+**The staleness trap:** L2 cache with \`READ_WRITE\` strategy handles concurrent updates safely via versioning. But if you bypass Hibernate (bulk SQL update, Flyway script, external service writes), the L2 cache is **never invalidated** and serves stale data until TTL expires. The query cache has the same issue — a table write invalidates all cached queries for that entity type, which can be worse than no cache at all on write-heavy tables.`,
         followUps: [
           { text: "Is the first-level cache enabled by default? What is its scope?" },
           { text: "How do you enable and configure second-level cache (e.g., with Redis/Ehcache)?" },
@@ -3368,6 +3962,40 @@ public class UserRestController {
       {
         id: 93,
         text: "What is the difference between `save()`, `saveAndFlush()`, and `persist()`?",
+        answer:
+          "Spring Data's `save()` calls `persist()` for new entities (null ID) and `merge()` for detached entities (non-null ID). `saveAndFlush()` does the same then immediately **flushes the session** — forcing the SQL to the DB without waiting for the transaction to commit. `persist()` is raw JPA — it only works on **new transient entities** and makes Hibernate manage that exact object instance. The critical `save()` return value rule: always use the **returned object** — for merge, the returned instance is managed, the argument is not.",
+        explanation: `The merge return value trap is real:
+
+\`\`\`java
+// WRONG — user is detached, save() calls merge(), but you keep using the argument
+User user = new User();
+user.setId(existingId); // detached entity
+repo.save(user);
+user.setName("updated"); // user is NOT managed — this change goes nowhere
+
+// RIGHT — always use the returned instance
+User managed = repo.save(user); // returns the managed copy
+managed.setName("updated");     // this is on the managed entity
+\`\`\`
+
+When to use \`saveAndFlush()\`:
+
+\`\`\`java
+@Transactional
+public void auditAndQuery() {
+    User user = repo.save(newUser);
+    // At this point the INSERT is NOT in the DB yet — just in session
+
+    // If we now run a native SQL query, it won't see the uncommitted row
+    // Fix: flush first
+    repo.flush();  // or use saveAndFlush() above
+
+    // Now the native query sees the new row
+    List<User> all = jdbcTemplate.query("SELECT * FROM users", ...);
+}
+\`\`\`
+
+**In tests:** \`saveAndFlush()\` is the right call when you want to verify the DB state immediately (e.g., test that a \`@Column(unique = true)\` constraint fires). Without flush, the INSERT may not have hit the DB when your assertion runs.`,
         followUps: [
           { text: "Is Spring Data's `save()` always an insert or can it update?" },
           { text: "When do you need `flush` before a subsequent query in the same transaction?" },
@@ -3377,6 +4005,44 @@ public class UserRestController {
       {
         id: 94,
         text: "What is optimistic locking vs pessimistic locking?",
+        answer:
+          "**Optimistic locking** assumes conflicts are rare — it lets transactions proceed without blocking, and checks for conflicts only at commit time using a `@Version` field. If another transaction committed first (version mismatch), it throws `OptimisticLockException` and the caller retries. **Pessimistic locking** assumes conflicts are frequent — it uses a DB-level `SELECT FOR UPDATE` to block other writers immediately. Optimistic is cheaper for low-contention workloads; pessimistic is necessary when you can't afford a retry (inventory decrement, financial writes).",
+        explanation: `Optimistic locking with \`@Version\`:
+
+\`\`\`java
+@Entity
+public class Product {
+    @Id Long id;
+    String name;
+    int stock;
+
+    @Version  // Hibernate adds WHERE version = ? AND id = ? on every UPDATE
+    Long version;
+}
+
+// Transaction A reads Product (version=1), Transaction B reads Product (version=1)
+// Transaction A saves (version bumps to 2) — succeeds
+// Transaction B tries to save — WHERE version=1 matches 0 rows
+// Hibernate throws OptimisticLockException — rollback, show conflict to user
+\`\`\`
+
+Pessimistic locking — when you need a hard lock:
+
+\`\`\`java
+@Transactional
+public void reserveSeat(Long seatId) {
+    // SELECT * FROM seats WHERE id = ? FOR UPDATE
+    // Other transactions block here until this transaction commits
+    Seat seat = seatRepo.findById(seatId,
+        LockModeType.PESSIMISTIC_WRITE).orElseThrow();
+
+    if (!seat.isAvailable()) throw new SeatTakenException();
+    seat.setAvailable(false); // guaranteed: no one else sees it as available
+}
+// Lock released on commit
+\`\`\`
+
+**Catch 409, not 500:** When optimistic lock fails, return HTTP 409 Conflict with a \"please refresh and retry\" message. Letting it surface as a 500 makes it look like a server bug when it's actually a concurrency signal.`,
         followUps: [
           { text: "How does `@Version` implement optimistic locking?" },
           { text: "What exception is thrown on optimistic lock failure?" },
@@ -3386,6 +4052,44 @@ public class UserRestController {
       {
         id: 95,
         text: "How do you manage database transactions in Spring (`@Transactional`)?",
+        answer:
+          "`@Transactional` is a Spring AOP annotation that wraps the annotated method in a DB transaction — it starts a transaction before, commits on success, or rolls back on unchecked exception. It only works when called through a **Spring proxy** (i.e., injected bean), not via `this.method()` or on private methods. Transactional boundaries belong at the **service layer**, not controller or repository.",
+        explanation: `The proxy trap — the #1 \`@Transactional\` bug:
+
+\`\`\`java
+@Service
+public class OrderService {
+
+    public void placeOrder(OrderDto dto) {
+        // This method is NOT @Transactional
+        // It calls saveItems() via 'this' — bypasses the Spring proxy
+        this.saveItems(dto.getItems()); // NO TRANSACTION — this is a self-call
+    }
+
+    @Transactional // silently ignored for self-calls
+    public void saveItems(List<Item> items) {
+        itemRepo.saveAll(items);
+    }
+}
+\`\`\`
+
+Fix: move to a separate bean or use the outer method as the transaction boundary:
+
+\`\`\`java
+@Service
+public class OrderService {
+
+    @Transactional // wraps the whole unit of work
+    public void placeOrder(OrderDto dto) {
+        Order order = orderRepo.save(toEntity(dto));
+        itemRepo.saveAll(toItemEntities(dto.getItems(), order));
+        paymentRepo.save(toPaymentEntity(dto, order));
+        // all three succeed or all roll back — one transaction
+    }
+}
+\`\`\`
+
+**Rollback defaults:** Spring rolls back on \`RuntimeException\` (unchecked) and commits on checked exceptions. So a \`SQLException\` (checked) by default does NOT roll back. Always specify \`rollbackFor = Exception.class\` or use unchecked exceptions for domain failures.`,
         followUps: [
           { text: "What is the default rollback policy for runtime vs checked exceptions?" },
           { text: "Does `@Transactional` work on private methods or self-invocation? Why?" },
@@ -3395,6 +4099,41 @@ public class UserRestController {
       {
         id: 96,
         text: "What is transaction propagation, and what are the different propagation types?",
+        answer:
+          "Propagation defines what happens when a `@Transactional` method is called while a transaction is already active. **`REQUIRED`** (default) joins existing or starts new — the standard for all service calls you want in one transaction. **`REQUIRES_NEW`** always starts a fresh transaction, suspending the outer one — use this for audit logging that must commit even if the outer transaction rolls back. **`NESTED`** creates a savepoint inside the outer transaction, allowing partial rollback. Most apps only ever use `REQUIRED` and `REQUIRES_NEW`.",
+        explanation: `The audit log scenario that demonstrates \`REQUIRES_NEW\`:
+
+\`\`\`java
+@Service
+public class OrderService {
+
+    @Autowired AuditService auditService;
+
+    @Transactional  // REQUIRED — outer transaction
+    public void cancelOrder(Long orderId) {
+        Order order = orderRepo.findById(orderId).orElseThrow();
+        order.setStatus(CANCELLED);
+        orderRepo.save(order);
+
+        // Audit must commit regardless of what happens after
+        auditService.log("ORDER_CANCELLED", orderId);
+
+        // Suppose this throws — outer transaction rolls back
+        // But audit is ALREADY committed thanks to REQUIRES_NEW
+        sendCancellationEmail(order); // throws
+    }
+}
+
+@Service
+public class AuditService {
+    @Transactional(propagation = Propagation.REQUIRES_NEW) // own transaction
+    public void log(String event, Long entityId) {
+        auditRepo.save(new AuditLog(event, entityId, Instant.now()));
+    } // commits here, independent of the outer transaction
+}
+\`\`\`
+
+With \`REQUIRED\` instead of \`REQUIRES_NEW\` on \`auditService.log()\`, the audit entry would roll back along with the outer transaction whenever \`sendCancellationEmail\` throws — leaving a gap in your audit trail.`,
         followUps: [
           { text: "Explain `REQUIRED`, `REQUIRES_NEW`, and `NESTED` with scenarios." },
           { text: "What happens with `NOT_SUPPORTED` and `MANDATORY`?" },
@@ -3404,6 +4143,39 @@ public class UserRestController {
       {
         id: 97,
         text: "What are transaction isolation levels?",
+        answer:
+          "Isolation levels define **how much concurrent transactions can see each other's uncommitted changes**. From weakest to strongest: `READ_UNCOMMITTED` (dirty reads allowed), `READ_COMMITTED` (no dirty reads, default in most DBs), `REPEATABLE_READ` (no dirty or non-repeatable reads, MySQL default), `SERIALIZABLE` (full isolation, no phantom reads, highest contention). Most Spring apps run at `READ_COMMITTED` — good enough for web apps, and raising isolation always costs concurrency.",
+        explanation: `The three anomalies each level prevents:
+
+\`\`\`
+Anomaly          | What it means                              | Prevented by
+-----------------|--------------------------------------------|------------------
+Dirty Read       | Read uncommitted data (may be rolled back)  | READ_COMMITTED+
+Non-repeatable   | Row changes between two reads in same txn  | REPEATABLE_READ+
+Phantom Read     | Range query returns different rows later    | SERIALIZABLE
+\`\`\`
+
+Practical example of non-repeatable read (the silent bug):
+
+\`\`\`java
+@Transactional(isolation = Isolation.READ_COMMITTED) // default
+public void checkAndCharge() {
+    Account acc = accountRepo.findById(id);
+    // READ 1: balance = 1000
+
+    // ... some business logic ...
+
+    Account acc2 = accountRepo.findById(id); // same query, same txn
+    // READ 2: balance = 500 — another transaction updated it!
+    // acc.getBalance() != acc2.getBalance() at READ_COMMITTED
+}
+
+// Fix: use REPEATABLE_READ — the first read value is locked for this txn
+@Transactional(isolation = Isolation.REPEATABLE_READ)
+public void checkAndCharge() { ... } // both reads guaranteed same value
+\`\`\`
+
+**Production advice:** Don't change isolation level speculatively. Understand your exact consistency requirement, prove READ_COMMITTED is insufficient, then raise it. Every level above READ_COMMITTED trades throughput for correctness.`,
         followUps: [
           { text: "Explain dirty read, non-repeatable read, and phantom read." },
           { text: "What is Spring/DB default isolation for most apps?" },
@@ -3413,6 +4185,47 @@ public class UserRestController {
       {
         id: 98,
         text: "How do you handle database migrations (Flyway/Liquibase)?",
+        answer:
+          "Flyway and Liquibase manage **versioned, incremental SQL scripts** that run in order on startup — every schema change is tracked, checksummed, and recorded in a history table. They replace `ddl-auto=update`, which is unpredictable in production (never drops columns, no history, not reviewable). Flyway uses `V{version}__{desc}.sql` files; Liquibase uses XML/YAML changesets. Both run before your app starts, so the schema is always in sync with your code.",
+        explanation: `Flyway naming and workflow:
+
+\`\`\`
+src/main/resources/db/migration/
+  V1__create_users_table.sql
+  V2__add_email_to_users.sql
+  V3__create_orders_table.sql
+  V4__add_user_id_index.sql
+\`\`\`
+
+\`\`\`sql
+-- V2__add_email_to_users.sql
+ALTER TABLE users ADD COLUMN email VARCHAR(255);
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+\`\`\`
+
+Flyway tracks this in \`flyway_schema_history\`:
+
+\`\`\`
+version | description           | checksum   | success
+--------|-----------------------|------------|--------
+1       | create users table    | 123456789  | true
+2       | add email to users    | 987654321  | true
+\`\`\`
+
+If you edit \`V2__\` after it's been applied, Flyway detects the checksum mismatch and **refuses to start** — the safety net that prevents silent schema drift.
+
+**vs \`ddl-auto=update\`:**
+
+\`\`\`yaml
+# NEVER in production
+spring.jpa.hibernate.ddl-auto=update
+# Problems: adds columns, never removes them, no audit trail,
+# non-deterministic across environments, not reviewable in PRs
+
+# USE INSTEAD:
+spring.jpa.hibernate.ddl-auto=validate  # just checks schema matches entity
+# Let Flyway own the schema changes
+\`\`\``,
         followUps: [
           { text: "Why prefer migrations over `ddl-auto=update` in production?" },
           { text: "How does Flyway version and checksum migration files?" },
@@ -3422,6 +4235,40 @@ public class UserRestController {
       {
         id: 99,
         text: "What is connection pooling, and which connection pool does Spring Boot use by default (HikariCP)?",
+        answer:
+          "Connection pooling maintains a **pre-created pool of DB connections** that threads borrow and return instead of creating and destroying connections per request — connection creation is expensive (TCP handshake, auth, driver overhead). Spring Boot uses **HikariCP** by default, which is the fastest JDBC connection pool available. Without pooling, a high-throughput app runs out of DB connections instantly and latency spikes on every connection setup.",
+        explanation: `What happens without a pool:
+
+\`\`\`
+Request 1 → CREATE connection (30-100ms) → query → CLOSE connection
+Request 2 → CREATE connection (30-100ms) → query → CLOSE connection
+// 100 concurrent users = 100 new DB connections per request cycle
+// DB server limit: 100 connections total → queue builds → timeouts
+\`\`\`
+
+With HikariCP:
+
+\`\`\`
+Startup: CREATE 10 connections, hold them open
+Request 1 → BORROW connection (microseconds) → query → RETURN to pool
+Request 2 → BORROW same connection → query → RETURN
+// 100 concurrent users share 10 connections with queueing
+\`\`\`
+
+Key HikariCP settings:
+
+\`\`\`yaml
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 10    # max connections (default 10)
+      minimum-idle: 5          # keep 5 warm at all times
+      connection-timeout: 30000 # 30s wait before throwing
+      idle-timeout: 600000     # evict idle connections after 10min
+      max-lifetime: 1800000    # recycle before DB server kills them (30min)
+\`\`\`
+
+**Pool size math:** don't blindly set it to 100. DB has a connection limit; divide by app instances. If DB allows 100 connections and you run 5 app pods, max pool is 20 per pod. Oversizing causes DB-side resource exhaustion; undersizing causes HikariCP queue buildup and timeout errors under load.`,
         followUps: [
           { text: "What key HikariCP settings matter (`maximumPoolSize`, timeouts)?" },
           { text: "What symptoms indicate pool exhaustion?" },
@@ -3431,6 +4278,38 @@ public class UserRestController {
       {
         id: 100,
         text: "What is the difference between SQL and NoSQL databases, and when would you choose one over the other?",
+        answer:
+          "**SQL databases** (PostgreSQL, MySQL) store structured data in tables with a fixed schema, enforce relational integrity, and support ACID multi-table transactions. **NoSQL databases** (MongoDB, Redis, Cassandra) trade strict schema and relational joins for flexible document/key-value structure, horizontal scalability, and schema evolution without `ALTER TABLE`. Choose SQL when your data is relational, consistency is critical, and you need complex queries; choose NoSQL when data is document-shaped with variable schema, write throughput is extreme, or you need geographic distribution.",
+        explanation: `The choosing-wrong-DB problem is real and expensive to fix later. Here's the decision:
+
+\`\`\`
+Use PostgreSQL (SQL) when:
+✓ You have entities with relationships (User → Order → Payment)
+✓ You need ACID transactions across multiple rows/tables
+✓ Your schema is stable and well-understood
+✓ You need complex JOINs, aggregations, window functions
+✓ Reporting and analytics queries matter
+
+Use MongoDB (NoSQL) when:
+✓ Documents are self-contained and rarely joined (product catalog, events)
+✓ Schema varies per document type (e-commerce products with different attributes)
+✓ You need flexible, fast schema evolution without migrations
+✓ Write throughput is very high (event logging, telemetry)
+\`\`\`
+
+Polyglot persistence — both in one system:
+
+\`\`\`java
+// Spring Boot config supports both simultaneously
+@SpringBootApplication
+// JPA for relational data (users, orders, payments)
+@EnableJpaRepositories(basePackages = "com.app.repositories.sql")
+// MongoDB for product catalog, search documents
+@EnableMongoRepositories(basePackages = "com.app.repositories.mongo")
+public class Application { ... }
+\`\`\`
+
+**The cross-store consistency trap:** if you write to Postgres and Mongo in the same operation and Mongo write fails, you've got partial state. No distributed transaction covers both. Solve it with the Outbox pattern or accept eventual consistency explicitly.`,
         followUps: [
           { text: "When is MongoDB a better fit than PostgreSQL?" },
           { text: "How do transactions differ in document stores vs relational DBs?" },
@@ -3440,6 +4319,40 @@ public class UserRestController {
       {
         id: 101,
         text: "Explain indexing in databases and how it affects query performance.",
+        answer:
+          "A database index is a **separate data structure (B-tree by default)** that maps column values to row locations, letting the DB jump directly to rows matching a `WHERE` clause instead of scanning the full table. Without an index, a `SELECT WHERE email = ?` on a 10M-row table reads every row (full scan). With an index on `email`, the DB does a B-tree lookup in `O(log n)` time and returns the row directly. The trade-off: indexes speed up reads but slow down every write (INSERT/UPDATE/DELETE must update all indexes on the table).",
+        explanation: `The visible cost of a missing index:
+
+\`\`\`sql
+-- SLOW: full table scan on 10M rows
+SELECT * FROM orders WHERE user_id = 42;
+-- EXPLAIN shows: Seq Scan, cost=0..250000 rows=50
+
+-- Add index
+CREATE INDEX idx_orders_user_id ON orders(user_id);
+
+-- FAST: index scan
+SELECT * FROM orders WHERE user_id = 42;
+-- EXPLAIN shows: Index Scan using idx_orders_user_id, cost=0..8 rows=50
+\`\`\`
+
+Composite index column order matters:
+
+\`\`\`sql
+-- Index: (user_id, status, created_at)
+CREATE INDEX idx_orders_composite ON orders(user_id, status, created_at);
+
+-- CAN use this index (left-prefix match):
+WHERE user_id = 42
+WHERE user_id = 42 AND status = 'PENDING'
+WHERE user_id = 42 AND status = 'PENDING' AND created_at > '2024-01-01'
+
+-- CANNOT use this index (no left-prefix):
+WHERE status = 'PENDING'   -- skips user_id
+WHERE created_at > '2024-01-01' -- skips both
+\`\`\`
+
+**Too many indexes trap:** a table with 10 indexes means every INSERT triggers 10 B-tree updates. On a write-heavy \`orders\` table (high insert rate), this serializes writes and tanks throughput. Use \`pg_stat_user_indexes\` in PostgreSQL to find indexes with \`idx_scan = 0\` (never used) and drop them.`,
         followUps: [
           { text: "What is the trade-off of too many indexes on write-heavy tables?" },
           { text: "What is a composite index, and does column order matter?" },
@@ -3449,6 +4362,40 @@ public class UserRestController {
       {
         id: 102,
         text: "What is the difference between `INNER JOIN`, `LEFT JOIN`, and `RIGHT JOIN`?",
+        answer:
+          "**`INNER JOIN`** returns only rows where the join condition matches on **both sides** — unmatched rows from either table are dropped. **`LEFT JOIN`** returns all rows from the left table plus matched rows from the right; unmatched right-side columns are `NULL`. **`RIGHT JOIN`** is the mirror: all rows from the right table. In practice you almost always use INNER and LEFT; RIGHT JOIN can always be rewritten as a LEFT JOIN by swapping table order, so most codebases stick to LEFT.",
+        explanation: `Data model: Users may or may not have Orders.
+
+\`\`\`sql
+-- INNER JOIN: only users who have at least one order
+SELECT u.name, o.total
+FROM users u
+INNER JOIN orders o ON u.id = o.user_id;
+-- Alice (2 orders) → 2 rows. Bob (0 orders) → NOT included.
+
+-- LEFT JOIN: all users, including those with no orders
+SELECT u.name, o.total
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id;
+-- Alice → 2 rows. Bob → 1 row with o.total = NULL
+
+-- Find users with NO orders (classic use of LEFT JOIN + NULL check)
+SELECT u.name
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE o.id IS NULL;  -- only rows where right side is NULL = no match
+\`\`\`
+
+The accidental CROSS JOIN:
+
+\`\`\`sql
+-- FORGOT the ON clause — every user paired with every order
+SELECT u.name, o.total FROM users u, orders o;
+-- 1000 users x 10000 orders = 10,000,000 rows returned
+-- This will OOM or timeout the DB under any real data volume
+\`\`\`
+
+**JPA connection:** \`JOIN FETCH\` in JPQL maps to SQL INNER JOIN; \`LEFT JOIN FETCH\` maps to LEFT OUTER JOIN and is necessary when the association can be \`null\` (optional \`@ManyToOne\`) — INNER JOIN would silently drop entities with a null FK.`,
         followUps: [
           { text: "When would a LEFT JOIN return nulls for the right side?" },
           { text: "How do joins relate to JPA association fetching?" },

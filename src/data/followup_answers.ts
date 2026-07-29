@@ -9,7 +9,10 @@
  *  - No GPT fluff, no "In conclusion", active voice, contractions
  *  - BAD/GOOD code only where it proves understanding
  */
-export const followupAnswers: Record<string, string> = {
+import { followupAnswersSpring } from "./followup_answers_spring";
+import { followupAnswersJpa } from "./followup_answers_jpa";
+
+const baseAnswers: Record<string, string> = {
   // ===================== Q1: == vs equals =====================
   "What happens when you compare two `Integer` objects with `==` that fall within the Integer cache range (-128 to 127)?":
     "Java caches `Integer` instances for values **-128 to 127**, so `Integer a = 127; Integer b = 127;` makes `a == b` **true** — both point at the same cached object. Outside that range autoboxing gives distinct objects, so `Integer x = 200; Integer y = 200;` makes `x == y` **false**. The cache avoids object churn for common small values.\n\n**Never rely on `==` for boxed types** — use `.equals()` or unbox to `int` first.",
@@ -359,4 +362,14 @@ export const followupAnswers: Record<string, string> = {
 
   "How does Spring's default singleton scope differ from a classic Singleton implementation?":
     "Spring's singleton is **per `ApplicationContext`** — one bean instance *per container*, not one per JVM/classloader like the Gang-of-Four Singleton. Run two contexts (e.g., parent + child, or tests) and you get two \"singletons.\" Spring manages lifecycle and injection; you never write double-checked locking. It's a scope, not a language-level guarantee — which is why it's safer and more testable than the classic pattern.",
+};
+
+/**
+ * Merged bank: the core Java/OOP answers above, plus the Spring-category
+ * answers. If a key exists in both, the spring file wins (last spread).
+ */
+export const followupAnswers: Record<string, string> = {
+  ...baseAnswers,
+  ...followupAnswersSpring,
+  ...followupAnswersJpa,
 };
