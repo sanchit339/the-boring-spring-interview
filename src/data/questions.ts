@@ -1341,11 +1341,13 @@ if (image == null) {
         text: "Explain the four pillars of OOP with examples.",
         answer:
             "**Encapsulation** — bundle state and behavior together, hide internal details. A `BankAccount` class exposes `deposit()` and `withdraw()` but keeps `balance` private. **Abstraction** — expose only what's necessary, hide complexity. A `PaymentService` interface exposes `processPayment()` — callers don't know if it talks to Stripe or PayPal.\n\n**Inheritance** — a subclass inherits and extends a parent's behavior. `SavingsAccount extends BankAccount` adds interest calculation. **Polymorphism** — the same interface behaves differently based on the actual type. A `List<PaymentProcessor>` can hold Stripe, PayPal, and Apple Pay processors, all called the same way.",
-        explanation: `**The Spring context for each pillar:**
+        explanation: `> **Analogy:** A car. **Encapsulation** — the engine is sealed under the hood; you get a pedal, not a fuel-injection dial. **Abstraction** — the pedal means "go faster" whether it's petrol, diesel or electric underneath. **Inheritance** — an ambulance is a van with extra kit, not a vehicle redesigned from scratch. **Polymorphism** — any driver can drive any car, because the controls honour the same contract.
 
-**Encapsulation:** Your service layer encapsulates business logic and hides repository details from controllers. The controller calls userService.createUser(dto) — it doesn't know whether that triggers a DB write, a Kafka event, or both.
+**The Spring context for each pillar:**
 
-**Abstraction:** Spring Data's JpaRepository is a perfect abstraction. You define findByEmail(String email) — the "how" (SQL generation, connection management) is completely hidden.
+**Encapsulation:** Your service layer hides repository details from controllers. The controller calls \`userService.createUser(dto)\` — it doesn't know whether that triggers a DB write, a Kafka event, or both.
+
+**Abstraction:** Spring Data's \`JpaRepository\` is the cleanest example in the framework. You declare \`findByEmail(String email)\` — the "how" (SQL generation, connection handling, result mapping) stays hidden.
 
 **Inheritance:**
 \`\`\`java
@@ -1454,24 +1456,29 @@ for (Shape s : shapes) {
         explanation: `**The fragile base class problem inheritance creates:**
 
 \`\`\`java
-// Inheritance — changes to parent break children
-class Set<E> extends ArrayList<E> { // WRONG: ArrayList is not a Set
-    int addCount = 0;
-    
+// Inheritance — you inherit the parent's INTERNAL call sequence too
+class InstrumentedHashSet<E> extends HashSet<E> {
+    private int addCount = 0;
+
     @Override
     public boolean add(E e) {
         addCount++;
         return super.add(e);
     }
-    
+
     @Override
     public boolean addAll(Collection<? extends E> c) {
-        addCount += c.size();
-        return super.addAll(c); // calls add() internally — addCount doubles!
+        addCount += c.size();   // +3
+        return super.addAll(c); // HashSet.addAll internally calls add() → +3 again
     }
+
+    public int getAddCount() { return addCount; }
 }
-// This is the famous "broken set" example from Effective Java
-// addAll([1,2,3]) results in addCount = 6, not 3
+
+// The broken-counter example from Effective Java, Item 18
+var set = new InstrumentedHashSet<String>();
+set.addAll(List.of("a", "b", "c"));
+set.getAddCount(); // returns 6, not 3 — superclass self-use double-counts
 \`\`\`
 
 **Composition fixes it:**
@@ -1605,13 +1612,27 @@ class PaypalGateway implements PaymentGateway { ... }
 
 **L — Liskov Substitution:**
 \`\`\`java
-// VIOLATION — Square extends Rectangle but breaks the contract
-class Rectangle { void setWidth(int w); void setHeight(int h); }
-class Square extends Rectangle {
-    @Override void setWidth(int w) { super.setWidth(w); super.setHeight(w); } // side effects!
+// VIOLATION — Square IS-A Rectangle mathematically, but not behaviourally
+class Rectangle {
+    protected int width, height;
+    void setWidth(int w)  { this.width = w; }
+    void setHeight(int h) { this.height = h; }
+    int area() { return width * height; }
 }
-// Rectangle r = new Square(); r.setWidth(5); r.setHeight(3);
-// Expected: area = 15. Actual: area = 9 (square forced equal sides) — LSP violated
+
+class Square extends Rectangle {
+    @Override void setWidth(int w)  { this.width = w; this.height = w; }  // side effect!
+    @Override void setHeight(int h) { this.width = h; this.height = h; }  // side effect!
+}
+
+// Code written against Rectangle now breaks when handed a Square:
+void resize(Rectangle r) {
+    r.setWidth(5);
+    r.setHeight(3);
+    assert r.area() == 15; // passes for Rectangle, FAILS for Square (area = 9)
+}
+// The subclass strengthened a precondition the caller never agreed to — LSP violated.
+// Fix: don't inherit. Make Square and Rectangle both implement a Shape interface.
 \`\`\`
 
 **I — Interface Segregation:**
@@ -4029,17 +4050,25 @@ public class Product {
 Pessimistic locking — when you need a hard lock:
 
 \`\`\`java
-@Transactional
+// You declare the lock on the repository method — there is no
+// findById(id, LockModeType) overload on JpaRepository
+public interface SeatRepository extends JpaRepository<Seat, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)   // adds FOR UPDATE to the SELECT
+    @Query("SELECT s FROM Seat s WHERE s.id = :id")
+    Optional<Seat> findByIdForUpdate(@Param("id") Long id);
+}
+
+@Transactional  // REQUIRED — no transaction means no lock
 public void reserveSeat(Long seatId) {
     // SELECT * FROM seats WHERE id = ? FOR UPDATE
     // Other transactions block here until this transaction commits
-    Seat seat = seatRepo.findById(seatId,
-        LockModeType.PESSIMISTIC_WRITE).orElseThrow();
+    Seat seat = seatRepo.findByIdForUpdate(seatId).orElseThrow();
 
     if (!seat.isAvailable()) throw new SeatTakenException();
     seat.setAvailable(false); // guaranteed: no one else sees it as available
 }
-// Lock released on commit
+// Lock released on commit — hold it for as short a window as possible
 \`\`\`
 
 **Catch 409, not 500:** When optimistic lock fails, return HTTP 409 Conflict with a \"please refresh and retry\" message. Letting it surface as a 500 makes it look like a server bug when it's actually a concurrency signal.`,
@@ -4170,9 +4199,14 @@ public void checkAndCharge() {
     // acc.getBalance() != acc2.getBalance() at READ_COMMITTED
 }
 
-// Fix: use REPEATABLE_READ — the first read value is locked for this txn
+// Fix: REPEATABLE_READ — both reads see the same MVCC snapshot.
+// Nothing is locked; the writer still commits. You just don't SEE the change.
 @Transactional(isolation = Isolation.REPEATABLE_READ)
-public void checkAndCharge() { ... } // both reads guaranteed same value
+public void checkAndCharge() { ... } // READ 1 == READ 2, guaranteed
+
+// Careful: a consistent READ is not a safe WRITE. If you read the balance
+// and then decrement it, you need @Version (optimistic) or SELECT ... FOR
+// UPDATE (pessimistic). Isolation alone won't stop lost updates.
 \`\`\`
 
 **Production advice:** Don't change isolation level speculatively. Understand your exact consistency requirement, prove READ_COMMITTED is insufficient, then raise it. Every level above READ_COMMITTED trades throughput for correctness.`,
