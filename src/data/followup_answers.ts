@@ -11,6 +11,7 @@
  */
 import { followupAnswersSpring } from "./followup_answers_spring";
 import { followupAnswersJpa } from "./followup_answers_jpa";
+import { followupAnswersSpringCore } from "./followup_answers_spring_core";
 
 const baseAnswers: Record<string, string> = {
   // ===================== Q1: == vs equals =====================
@@ -372,4 +373,5 @@ export const followupAnswers: Record<string, string> = {
   ...baseAnswers,
   ...followupAnswersSpring,
   ...followupAnswersJpa,
+  ...followupAnswersSpringCore,
 };
