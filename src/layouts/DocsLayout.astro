@@ -16,9 +16,10 @@ interface Props {
   description?: string;
   currentCategory?: string;
   toc?: TocItem[];
+  wide?: boolean;
 }
 
-const { title, description, currentCategory, toc = [] } = Astro.props;
+const { title, description, currentCategory, toc = [], wide = false } = Astro.props;
 const searchIndex = getAllQuestions().map((q) => ({
   id: q.id,
   text: q.text.replace(/`/g, ""),
@@ -33,7 +34,7 @@ const searchIndex = getAllQuestions().map((q) => ({
   <div class="docs-shell">
     <Sidebar currentCategory={currentCategory} />
     <main class="docs-main">
-      <div class="docs-content">
+      <div class={`docs-content ${wide ? "docs-content-wide" : ""}`}>
         <slot />
       </div>
     </main>
@@ -215,6 +216,11 @@ const searchIndex = getAllQuestions().map((q) => ({
     width: 100%;
     max-width: calc(var(--content-max) + 64px);
     padding: var(--space-xxl) var(--space-xl) var(--space-section);
+  }
+
+  .docs-content-wide {
+    max-width: 1400px;
+    width: 100%;
   }
 
   @media (max-width: 768px) {

@@ -25,6 +25,12 @@ const totalFU = getTotalFollowUpCount();
     <div class="hero-actions">
       <a href="/core-java" class="btn btn-primary">Start with Core Java</a>
       <a href="/spring-boot" class="btn btn-secondary">Jump to Spring Boot</a>
+      <a href="/discussions" class="btn btn-discussions">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M2 4a1 1 0 011-1h8a1 1 0 011 1v5a1 1 0 01-1 1H8.5L7 12l-1.5-2H3a1 1 0 01-1-1V4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+        Discussions
+      </a>
     </div>
   </div>
 
@@ -77,6 +83,40 @@ const totalFU = getTotalFollowUpCount();
         ))
       }
     </div>
+  </section>
+
+  <!-- Discussions section -->
+  <section class="section disc-section">
+    <div class="section-head">
+      <h2 class="display-sm">Discussions</h2>
+      <p class="body-sm section-desc">
+        Deep-dive explanations of Spring Boot concepts from real questions —
+        read through full discussions with code examples and analogies.
+      </p>
+    </div>
+    <a href="/discussions" class="disc-cta-card card">
+      <div class="disc-cta-left">
+        <span class="disc-cta-icon">💬</span>
+        <div class="disc-cta-text">
+          <span class="disc-cta-title">Spring Constructor Dependency Injection</span>
+          <span class="disc-cta-desc body-sm">
+            Why is a constructor with arguments created when services are annotated with @Service?
+            Understand constructor injection vs field injection.
+          </span>
+        </div>
+      </div>
+      <span class="disc-cta-arrow">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </a>
+    <a href="/discussions" class="disc-view-all caption">
+      View all discussions
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
   </section>
 
   <section class="section how">
@@ -282,4 +322,110 @@ const totalFU = getTotalFollowUpCount();
       grid-template-columns: 1fr;
     }
   }
+
+  /* Discussions button in hero */
+  .btn-discussions {
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    color: var(--color-primary-hover);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+    gap: 8px;
+  }
+  .btn-discussions:hover {
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+    border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  }
+
+  /* Discussions section */
+  .disc-section {
+    margin-bottom: var(--space-section);
+  }
+
+  .disc-cta-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: var(--space-lg);
+    text-decoration: none;
+    margin-bottom: var(--space-md);
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .disc-cta-card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--color-primary);
+    border-radius: var(--radius-xs);
+    opacity: 0.8;
+  }
+
+  .disc-cta-card:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+
+  .disc-cta-left {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .disc-cta-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .disc-cta-text {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .disc-cta-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-ink);
+    line-height: 1.3;
+  }
+
+  .disc-cta-desc {
+    color: var(--color-ink-subtle);
+    line-height: 1.5;
+  }
+
+  .disc-cta-arrow {
+    color: var(--color-primary-hover);
+    opacity: 0.6;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .disc-cta-card:hover .disc-cta-arrow {
+    opacity: 1;
+    transform: translateX(3px);
+  }
+
+  .disc-view-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-primary-hover);
+    font-weight: 500;
+    transition: gap 0.15s ease;
+  }
+
+  .disc-view-all:hover {
+    gap: 10px;
+  }
 </style>
+

@@ -47,6 +47,21 @@ const { currentCategory } = Astro.props;
       </nav>
     </div>
 
+    <div class="sidebar-section">
+      <p class="sidebar-label">Learn</p>
+      <nav class="sidebar-nav">
+        <a
+          href="/discussions"
+          class:list={["sidebar-link", { active: currentCategory === "discussions" }]}
+          data-category="discussions"
+        >
+          <span class="link-icon" aria-hidden="true">💬</span>
+          <span class="link-text">Discussions</span>
+          <span class="link-count disc-badge">New</span>
+        </a>
+      </nav>
+    </div>
+
     <div class="sidebar-footer">
       <p class="caption">
         Linear UI · Mintlify layout
@@ -150,6 +165,14 @@ const { currentCategory } = Astro.props;
     border-radius: var(--radius-pill);
     padding: 1px 7px;
     flex-shrink: 0;
+  }
+
+  .disc-badge {
+    background: color-mix(in srgb, var(--color-primary) 18%, transparent) !important;
+    color: var(--color-primary-hover) !important;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent) !important;
+    font-size: 10px !important;
+    letter-spacing: 0.3px;
   }
 
   .sidebar-footer {

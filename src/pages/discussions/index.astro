@@ -1,0 +1,707 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
+// Read all markdown files from topicDiscussions/ at the project root
+const discussionsDir = join(process.cwd(), "topicDiscussions");
+const mdFiles = readdirSync(discussionsDir).filter((f: string) => f.endsWith(".md"));
+
+const discussions = mdFiles.map((filename: string) => {
+  const slug = filename.replace(".md", "");
+  const content = readFileSync(join(discussionsDir, filename), "utf-8");
+  const title = slug
+    .split("-")
+    .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+  // First content line for description
+  const lines = content.split("\n").filter((l: string) => l.trim());
+  const firstContent = lines[0]?.replace(/^[>#\s*]+/, "").slice(0, 120) || "";
+  return { slug, title, content, firstContent };
+});
+
+const topics = discussions.map(({ slug, title, firstContent }: { slug: string; title: string; firstContent: string }) => ({ slug, title, firstContent }));
+---
+
+<DocsLayout
+  title="Discussions"
+  description="Topic discussions — read through real Spring Boot concepts explained in detail."
+  currentCategory="discussions"
+  wide={true}
+>
+  <div class="disc-page">
+    <div class="disc-header">
+      <p class="eyebrow">Knowledge Base</p>
+      <h1 class="display-sm disc-title">Discussions</h1>
+      <p class="body-sm disc-lead">
+        Deep-dive explanations of Spring Boot concepts — real questions, real
+        answers. Click a topic to read the full discussion.
+      </p>
+    </div>
+
+    <div class="disc-layout" id="disc-layout">
+      <!-- Topic List -->
+      <aside class="disc-sidebar" id="disc-sidebar">
+        <p class="disc-sidebar-label">Topics ({topics.length})</p>
+        <nav class="disc-nav" id="disc-nav">
+          {
+            topics.map((t, i) => (
+              <button
+                class="disc-topic-btn"
+                data-slug={t.slug}
+                data-index={i}
+                id={`topic-btn-${t.slug}`}
+                aria-selected="false"
+              >
+                <span class="disc-topic-icon" aria-hidden="true">💬</span>
+                <span class="disc-topic-info">
+                  <span class="disc-topic-title">{t.title}</span>
+                  <span class="disc-topic-desc">{t.firstContent}</span>
+                </span>
+                <svg
+                  class="disc-topic-arrow"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 7h6M7 4l3 3-3 3"
+                    stroke="currentColor"
+                    stroke-width="1.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            ))
+          }
+        </nav>
+      </aside>
+
+      <!-- Content Viewer -->
+      <div class="disc-content-wrap" id="disc-content-wrap">
+        <div class="disc-empty" id="disc-empty">
+          <div class="disc-empty-icon">📖</div>
+          <p class="disc-empty-title">Select a discussion topic</p>
+          <p class="disc-empty-hint body-sm">
+            Choose a topic from the left panel to read the full discussion.
+          </p>
+        </div>
+        <article class="disc-article" id="disc-article" hidden>
+          <div class="disc-article-header">
+            <button class="btn btn-ghost disc-back" id="disc-back">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M10 7H4M7 4L4 7l3 3"
+                  stroke="currentColor"
+                  stroke-width="1.4"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              Back
+            </button>
+            <h2 class="disc-article-title" id="disc-article-title"></h2>
+            <div class="disc-article-meta" id="disc-article-meta"></div>
+          </div>
+          <div class="disc-article-body markdown-body" id="disc-article-body">
+          </div>
+        </article>
+      </div>
+    </div>
+  </div>
+</DocsLayout>
+
+<!-- Embed all discussion content as JSON -->
+<script
+  type="application/json"
+  id="discussions-data"
+  set:html={JSON.stringify(
+    discussions.map(({ slug, content }: { slug: string; content: string }) => ({ slug, content }))
+  )}
+/>
+
+
+<script>
+  // Parse discussions data
+  const dataEl = document.getElementById("discussions-data");
+  const discussions: Array<{ slug: string; content: string }> = dataEl
+    ? JSON.parse(dataEl.textContent || "[]")
+    : [];
+
+  // Simple markdown to HTML renderer
+  function mdToHtml(md: string): string {
+    let html = md;
+
+    // Escape HTML entities first (except code blocks)
+    // Process code blocks first to protect them
+    const codeBlocks: string[] = [];
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang, code) => {
+      const escaped = code
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      const idx = codeBlocks.length;
+      codeBlocks.push(
+        `<pre class="md-pre"><code class="md-code md-code-block${lang ? ` lang-${lang}` : ""}">${escaped}</code></pre>`
+      );
+      return `\x00CODE${idx}\x00`;
+    });
+
+    // Inline code
+    html = html.replace(/`([^`\n]+)`/g, (_m, code) => {
+      const escaped = code
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return `<code class="md-inline-code">${escaped}</code>`;
+    });
+
+    // Headings
+    html = html.replace(/^#{4}\s+(.+)$/gm, "<h4 class='md-h4'>$1</h4>");
+    html = html.replace(/^#{3}\s+(.+)$/gm, "<h3 class='md-h3'>$1</h3>");
+    html = html.replace(/^#{2}\s+(.+)$/gm, "<h2 class='md-h2'>$1</h2>");
+    html = html.replace(/^#{1}\s+(.+)$/gm, "<h1 class='md-h1'>$1</h1>");
+
+    // Bold & italic
+    html = html.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+    html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+    // Blockquote
+    html = html.replace(/^>\s*(.+)$/gm, "<blockquote class='md-blockquote'>$1</blockquote>");
+
+    // Horizontal rule
+    html = html.replace(/^---+$/gm, "<hr class='md-hr' />");
+
+    // Unordered lists
+    html = html.replace(
+      /((?:^\*\s.+\n?)+)/gm,
+      (match) => {
+        const items = match
+          .trim()
+          .split("\n")
+          .filter((l) => l.trim())
+          .map((l) => `<li>${l.replace(/^\*\s/, "")}</li>`)
+          .join("\n");
+        return `<ul class="md-ul">${items}</ul>`;
+      }
+    );
+
+    // Ordered lists
+    html = html.replace(
+      /((?:^\d+\.\s.+\n?)+)/gm,
+      (match) => {
+        const items = match
+          .trim()
+          .split("\n")
+          .filter((l) => l.trim())
+          .map((l) => `<li>${l.replace(/^\d+\.\s/, "")}</li>`)
+          .join("\n");
+        return `<ol class="md-ol">${items}</ol>`;
+      }
+    );
+
+    // Paragraphs: wrap lines that aren't already wrapped in tags
+    const lines = html.split("\n");
+    const paraLines: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (
+        !trimmed ||
+        trimmed.startsWith("<h") ||
+        trimmed.startsWith("<ul") ||
+        trimmed.startsWith("<ol") ||
+        trimmed.startsWith("<li") ||
+        trimmed.startsWith("</") ||
+        trimmed.startsWith("<blockquote") ||
+        trimmed.startsWith("<hr") ||
+        trimmed.startsWith("<pre") ||
+        trimmed.startsWith("\x00CODE")
+      ) {
+        paraLines.push(line);
+      } else {
+        paraLines.push(`<p class="md-p">${line}</p>`);
+      }
+    }
+    html = paraLines.join("\n");
+
+    // Restore code blocks
+    codeBlocks.forEach((block, i) => {
+      html = html.replace(`\x00CODE${i}\x00`, block);
+    });
+
+    return html;
+  }
+
+  // State
+  let activeSlug: string | null = null;
+
+  function selectTopic(slug: string) {
+    const disc = discussions.find((d) => d.slug === slug);
+    if (!disc) return;
+
+    activeSlug = slug;
+
+    // Update button states
+    document.querySelectorAll(".disc-topic-btn").forEach((btn) => {
+      const b = btn as HTMLElement;
+      b.classList.remove("active");
+      b.setAttribute("aria-selected", "false");
+    });
+    const activeBtn = document.getElementById(`topic-btn-${slug}`);
+    activeBtn?.classList.add("active");
+    activeBtn?.setAttribute("aria-selected", "true");
+
+    // Generate title from slug
+    const title = slug
+      .split("-")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+
+    // Set content
+    const articleTitle = document.getElementById("disc-article-title");
+    const articleBody = document.getElementById("disc-article-body");
+    const articleMeta = document.getElementById("disc-article-meta");
+
+    if (articleTitle) articleTitle.textContent = title;
+    if (articleBody) articleBody.innerHTML = mdToHtml(disc.content);
+    if (articleMeta) {
+      articleMeta.innerHTML = `<span class="disc-meta-badge">Discussion</span><span class="disc-meta-file">${slug}.md</span>`;
+    }
+
+    // Show article, hide empty
+    const empty = document.getElementById("disc-empty");
+    const article = document.getElementById("disc-article");
+    if (empty) empty.hidden = true;
+    if (article) article.hidden = false;
+
+    // On mobile: scroll to content
+    if (window.innerWidth < 768) {
+      document.getElementById("disc-content-wrap")?.scrollIntoView({ behavior: "smooth" });
+    }
+  }
+
+  function clearSelection() {
+    activeSlug = null;
+    document.querySelectorAll(".disc-topic-btn").forEach((btn) => {
+      (btn as HTMLElement).classList.remove("active");
+      (btn as HTMLElement).setAttribute("aria-selected", "false");
+    });
+    const empty = document.getElementById("disc-empty");
+    const article = document.getElementById("disc-article");
+    if (empty) empty.hidden = false;
+    if (article) article.hidden = true;
+  }
+
+  // Event listeners
+  document.querySelectorAll(".disc-topic-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const slug = (btn as HTMLElement).dataset.slug;
+      if (slug) {
+        if (activeSlug === slug) {
+          clearSelection();
+        } else {
+          selectTopic(slug);
+        }
+      }
+    });
+  });
+
+  document.getElementById("disc-back")?.addEventListener("click", clearSelection);
+
+  // Auto-select first topic if there is one
+  if (discussions.length > 0) {
+    // Don't auto-select, let user pick
+  }
+</script>
+
+<style>
+  .disc-page {
+    padding-bottom: var(--space-section);
+  }
+
+  .disc-header {
+    margin-bottom: var(--space-xxl);
+  }
+
+  .disc-title {
+    margin: var(--space-sm) 0 var(--space-md);
+  }
+
+  .disc-lead {
+    color: var(--color-ink-subtle);
+    max-width: 520px;
+  }
+
+  /* Split Layout */
+  .disc-layout {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: var(--space-lg);
+    align-items: flex-start;
+    min-height: 520px;
+  }
+
+  /* Sidebar */
+  .disc-sidebar {
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    position: sticky;
+    top: calc(var(--header-height) + var(--space-lg));
+  }
+
+  .disc-sidebar-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--color-ink-tertiary);
+    padding: var(--space-md) var(--space-md) var(--space-xs);
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .disc-nav {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-xs);
+    gap: 2px;
+    max-height: calc(100vh - var(--header-height) - 200px);
+    overflow-y: auto;
+  }
+
+  .disc-topic-btn {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, color 0.15s ease;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--color-ink-subtle);
+  }
+
+  .disc-topic-btn:hover {
+    background: var(--color-surface-2);
+    color: var(--color-ink);
+  }
+
+  .disc-topic-btn.active {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-ink);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+  }
+
+  .disc-topic-btn.active .disc-topic-arrow {
+    color: var(--color-primary-hover);
+    opacity: 1;
+  }
+
+  .disc-topic-icon {
+    font-size: 16px;
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  .disc-topic-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .disc-topic-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-ink);
+    line-height: 1.35;
+  }
+
+  .disc-topic-desc {
+    font-size: 11px;
+    color: var(--color-ink-tertiary);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .disc-topic-arrow {
+    flex-shrink: 0;
+    margin-top: 3px;
+    opacity: 0.3;
+    transition: opacity 0.15s ease, color 0.15s ease;
+  }
+
+  .disc-topic-btn:hover .disc-topic-arrow {
+    opacity: 0.7;
+  }
+
+  /* Content Pane */
+  .disc-content-wrap {
+    background: var(--color-surface-1);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-xl);
+    min-height: 520px;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  /* Empty State */
+  [hidden] {
+    display: none !important;
+  }
+
+  .disc-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 520px;
+    padding: var(--space-xxl);
+    gap: var(--space-md);
+  }
+
+  .disc-empty-icon {
+    font-size: 48px;
+    filter: grayscale(0.4) opacity(0.6);
+    margin-bottom: var(--space-xs);
+  }
+
+  .disc-empty-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--color-ink-muted);
+  }
+
+  .disc-empty-hint {
+    color: var(--color-ink-tertiary);
+    max-width: 280px;
+  }
+
+  /* Article */
+  .disc-article {
+    padding: var(--space-xl);
+    animation: fadeSlideIn 0.2s ease;
+  }
+
+  @keyframes fadeSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .disc-article-header {
+    margin-bottom: var(--space-xl);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .disc-back {
+    align-self: flex-start;
+    font-size: 13px;
+    gap: 6px;
+    color: var(--color-ink-tertiary);
+    padding: 5px 8px;
+    margin-bottom: var(--space-xs);
+  }
+
+  .disc-back:hover {
+    color: var(--color-ink);
+  }
+
+  .disc-article-title {
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    color: var(--color-ink);
+    line-height: 1.25;
+  }
+
+  .disc-article-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .disc-article-body {
+    /* handled by markdown styles below */
+  }
+
+  /* Markdown Styles */
+  :global(.md-h1) {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.4px;
+    color: var(--color-ink);
+    margin: var(--space-xl) 0 var(--space-md);
+    padding-bottom: var(--space-xs);
+    border-bottom: 1px solid var(--color-hairline);
+    line-height: 1.3;
+  }
+
+  :global(.md-h2) {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+    color: var(--color-ink);
+    margin: var(--space-lg) 0 var(--space-sm);
+    line-height: 1.35;
+  }
+
+  :global(.md-h3) {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    margin: var(--space-md) 0 var(--space-xs);
+  }
+
+  :global(.md-h4) {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-ink-muted);
+    margin: var(--space-sm) 0 var(--space-xxs);
+  }
+
+  :global(.md-p) {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--color-ink-muted);
+    margin: var(--space-sm) 0;
+  }
+
+  :global(.md-hr) {
+    border: none;
+    border-top: 1px solid var(--color-hairline);
+    margin: var(--space-xl) 0;
+  }
+
+  :global(.md-blockquote) {
+    border-left: 3px solid var(--color-primary);
+    padding: var(--space-sm) var(--space-md);
+    margin: var(--space-md) 0;
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-size: 14px;
+    color: var(--color-ink-muted);
+    font-style: italic;
+  }
+
+  :global(.md-ul),
+  :global(.md-ol) {
+    margin: var(--space-sm) 0;
+    padding-left: var(--space-xl);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  :global(.md-ul li),
+  :global(.md-ol li) {
+    font-size: 14px;
+    color: var(--color-ink-muted);
+    line-height: 1.6;
+  }
+
+  :global(.md-ul li::marker) {
+    color: var(--color-primary-hover);
+  }
+
+  :global(.md-ol li::marker) {
+    color: var(--color-primary-hover);
+    font-weight: 600;
+  }
+
+  :global(.md-pre) {
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--radius-md);
+    padding: var(--space-md) var(--space-lg);
+    margin: var(--space-md) 0;
+    overflow-x: auto;
+  }
+
+  :global(.md-code-block) {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--color-ink-muted);
+    background: none;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+  }
+
+  :global(.md-inline-code) {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--color-surface-2);
+    color: var(--color-primary-hover);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    border: 1px solid var(--color-hairline);
+  }
+
+  /* Meta badge */
+  :global(.disc-meta-badge) {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary-hover);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+  }
+
+  :global(.disc-meta-file) {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--color-ink-tertiary);
+  }
+
+  /* Responsive */
+  @media (max-width: 860px) {
+    .disc-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .disc-sidebar {
+      position: static;
+    }
+
+    .disc-nav {
+      max-height: 280px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .disc-article {
+      padding: var(--space-md);
+    }
+  }
+</style>
