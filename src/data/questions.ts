@@ -909,10 +909,9 @@ String name = (String) names.get(1); // ClassCastException at runtime
 List<String> names = new ArrayList<>();
 names.add("Alice");
 names.add(42); // compile error — cannot add int to List<String>
-\`\`\`
 
-**Type erasure — what actually exists at runtime:**
-\`\`\`java
+// ---- Type erasure — what actually exists at runtime ----
+
 // These two have IDENTICAL bytecode after compilation
 List<String> strings = new ArrayList<>();
 List<Integer> ints = new ArrayList<>();
@@ -975,10 +974,9 @@ class Task implements Runnable {
 
 // With volatile — Thread 1 always reads from main memory
 private volatile boolean running = true; // Fixed
-\`\`\`
 
-**The atomicity trap — volatile is NOT enough for count++:**
-\`\`\`java
+// ---- The atomicity trap — volatile is NOT enough for count++ ----
+
 // BROKEN — volatile doesn't protect this compound operation
 private volatile int count = 0;
 
@@ -1031,10 +1029,9 @@ class MyTask extends Thread {
     }
 }
 new MyTask().start();
-\`\`\`
 
-**The Runnable approach — prefer this:**
-\`\`\`java
+// ---- The Runnable approach — prefer this ----
+
 // GOOD — task is decoupled from threading mechanism
 Runnable task = () -> System.out.println("Doing work...");
 
@@ -1142,10 +1139,9 @@ for (Request request : requests) {
     pool.submit(() -> process(request));
 }
 pool.shutdown(); // stop accepting new tasks, finish pending ones
-\`\`\`
 
-**execute() vs submit():**
-\`\`\`java
+// ---- execute() vs submit() ----
+
 // execute — fire and forget, no result, unchecked exceptions are unhandled
 pool.execute(() -> sendNotification(userId));
 
