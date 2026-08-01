@@ -377,11 +377,8 @@ try {
         }
     }
 }
-\`\`\`
 
-**The right way — try-with-resources:**
-
-\`\`\`java
+// ---- The right way — try-with-resources ----
 try (FileInputStream fis = new FileInputStream("file.txt")) {
     // use fis
 } catch (IOException e) {
@@ -422,11 +419,8 @@ Map<String, Integer> counts = new HashMap<>();
 int count = counts.get("nonexistent"); // get() returns null, unboxing null → NPE
 // Fix:
 int safeCount = counts.getOrDefault("nonexistent", 0); // safe
-\`\`\`
 
-**The Integer cache surprise:**
-
-\`\`\`java
+// ---- The Integer cache surprise ----
 Integer a = 127;
 Integer b = 127;
 System.out.println(a == b); // true — same cached object
@@ -648,11 +642,8 @@ List<String> allItems = orders.stream()
     .flatMap(order -> order.getItems().stream())
     .collect(Collectors.toList());
 // ["Apple", "Bread", "Milk", "Cheese", "Eggs"]
-\`\`\`
 
-**flatMap on Optional — the monadic use:**
-
-\`\`\`java
+// ---- flatMap on Optional — the monadic use ----
 // User.getAddress() returns Optional<Address> — that return type is what nests
 Optional<User> user = userRepository.findById(id);
 
@@ -700,11 +691,8 @@ public class Product implements Comparable<Product> {
 
 List<Product> products = new ArrayList<>(...);
 Collections.sort(products); // uses compareTo() — sorts by price
-\`\`\`
 
-**Comparator — external, flexible, chainable:**
-
-\`\`\`java
+// ---- Comparator — external, flexible, chainable ----
 // Sort by name instead
 Comparator<Product> byName = Comparator.comparing(Product::getName);
 
@@ -787,11 +775,8 @@ public class Calculator {
     public int add(int a, int b, int c) { return a + b + c; }
 }
 // The compiler picks the right version based on argument types
-\`\`\`
 
-**Overriding — resolved at runtime (dynamic dispatch):**
-
-\`\`\`java
+// ---- Overriding — resolved at runtime (dynamic dispatch) ----
 class Animal {
     public String sound() { return "..."; }
 }
@@ -853,10 +838,8 @@ public class AppConfig {
     private static int requestCount = 0; // race condition waiting to happen
     public static void incrementCount() { requestCount++; } // not atomic!
 }
-\`\`\`
 
-**Static block — runs once at class load:**
-\`\`\`java
+// ---- Static block — runs once at class load ----
 public class DbDriver {
     static {
         // Runs when class is first loaded
@@ -1074,10 +1057,8 @@ public synchronized void increment() {
 
 // Static method — locks on Counter.class
 public static synchronized Counter getInstance() { ... }
-\`\`\`
 
-**Synchronized block — lock only what matters:**
-\`\`\`java
+// ---- Synchronized block — lock only what matters ----
 public void increment() {
     // Do non-critical work without holding lock
     String message = "incremented to " + (count + 1);
@@ -1091,6 +1072,9 @@ public void increment() {
 \`\`\`
 
 **Race condition — what synchronized prevents:**
+
+**The lock object matters:** Don't synchronize on public objects or literals — someone else could lock on the same object and create unexpected deadlocks. Use a private dedicated lock object:
+
 \`\`\`java
 // Without synchronization — race condition
 // Thread 1: reads count = 5
@@ -1107,10 +1091,7 @@ public synchronized void incrementSafely() { safeCount++; }
 // Or use AtomicInteger — faster, no lock needed
 private final AtomicInteger atomicCount = new AtomicInteger(0);
 public void incrementAtomically() { atomicCount.incrementAndGet(); }
-\`\`\`
 
-**The lock object matters:** Don't synchronize on public objects or literals — someone else could lock on the same object and create unexpected deadlocks. Use a private dedicated lock object:
-\`\`\`java
 private final Object lock = new Object();
 synchronized (lock) { ... } // safer than synchronized (this)
 \`\`\``,
@@ -1237,10 +1218,8 @@ Thread t2 = new Thread(() -> {
         synchronized (lockB) { System.out.println("T2 done"); }
     }
 });
-\`\`\`
 
-**Fix 2 — tryLock with timeout (ReentrantLock):**
-\`\`\`java
+// ---- Fix 2 — tryLock with timeout (ReentrantLock) ----
 ReentrantLock lockA = new ReentrantLock();
 ReentrantLock lockB = new ReentrantLock();
 
@@ -1558,10 +1537,8 @@ public class OrderController {
         return repository.save(new Order(req)); // what if we switch to PostgreSQL?
     }
 }
-\`\`\`
 
-**Loose coupling — with DI:**
-\`\`\`java
+// ---- Loose coupling — with DI ----
 // OrderController depends only on the interface — low coupling
 @RestController
 public class OrderController {
@@ -1799,10 +1776,8 @@ class Singleton {
         return instance;
     }
 }
-\`\`\`
 
-**Double-checked locking — the full solution:**
-\`\`\`java
+// ---- Double-checked locking — the full solution ----
 class Singleton {
     private static volatile Singleton instance; // volatile is REQUIRED here
     
