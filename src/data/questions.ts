@@ -1997,26 +1997,21 @@ public class Application {
         text: "What is the difference between `BeanFactory` and `ApplicationContext`?",
         answer: "`BeanFactory` is the basic IoC container interface that provides fundamental bean creation and retrieval using **lazy initialization** (beans are instantiated only when requested with `getBean()`). `ApplicationContext` is a child interface of `BeanFactory` designed for enterprise applications, offering **eager initialization** of singleton beans during startup. `ApplicationContext` adds support for AOP integration, application events, message source i18n, and web-aware scopes. You should always use **`ApplicationContext`** in real apps, reserving `BeanFactory` strictly for memory-constrained environments like Android or embedded IoT devices.",
         explanation: `\`\`\`java
-// BAD for production — BeanFactory loads lazily, so configuration errors pop up at runtime
-BeanFactory factory = new XmlBeanFactory(new ClassPathResource("beans.xml"));
-// App starts fast, but crashes later when a user hits a misconfigured bean!
-PaymentService service = (PaymentService) factory.getBean("paymentService"); // NPE or BeanDefinitionException here
+// BAD for production — a bare BeanFactory builds beans lazily, so config errors surface late
+// (XmlBeanFactory is gone — deprecated in Spring 3.1, removed in Spring 5)
+DefaultListableBeanFactory factory = new DefaultListableBeanFactory();
+factory.registerBeanDefinition("paymentService", new RootBeanDefinition(PaymentService.class));
+// Nothing is validated yet — the app "starts" instantly because nothing was built
+PaymentService service = factory.getBean(PaymentService.class); // BeanCreationException fires HERE, mid-request
 \`\`\`
 
 \`\`\`java
-// GOOD — ApplicationContext loads eagerly, validating all singleton beans at startup
+// GOOD — ApplicationContext instantiates every non-lazy singleton at startup
 ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.class);
-// Fail-Fast: If a required bean is missing or misconfigured, context fails during startup, NOT during a user request
+// Fail-fast: a missing bean or a bad @Value blows up the deployment, NOT the first user request
 \`\`\`
 
-**Feature matrix comparison:**
-
-| Feature | \`BeanFactory\` | \`ApplicationContext\` |
-| :--- | :--- | :--- |
-| **Bean Initialization** | Lazy (on \`getBean()\`) | Eager (at startup for singletons) |
-| **Enterprise Services (AOP, Events)** | No | Built-in |
-| **Memory Footprint** | Lightweight | Slightly higher |
-| **Usage Scenario** | Mobile / Embedded IoT | Standard Web & Microservices |
+**How they actually differ:** \`BeanFactory\` instantiates lazily on \`getBean()\`; \`ApplicationContext\` instantiates non-lazy singletons eagerly during startup. \`BeanFactory\` gives you nothing but bean creation and lookup, while \`ApplicationContext\` layers on AOP auto-proxying, \`ApplicationEvent\` publishing, \`MessageSource\` i18n, resource loading, and web-aware scopes. You pay for that with a slightly larger footprint and a slower start — the only trade that ever favours \`BeanFactory\` is a genuinely memory-constrained embedded device.
 
 **Real-world trap:** If you rely on \`BeanFactory\` or set \`@Lazy\` on your singletons indiscriminately, missing configuration properties or broken bean wiring will only fail when the first production request hits that specific line of code. \`ApplicationContext\` gives you fail-fast protection on deployment.`,
         followUps: [
@@ -2126,33 +2121,38 @@ public class CacheLoader {
         text: "What are `@Component`, `@Service`, `@Repository`, and `@Controller` — how do they differ?",
         answer: "`@Component` is the generic stereotype annotation indicating that a Java class is a Spring-managed bean. `@Service`, `@Repository`, and `@Controller` are **specialized meta-annotations** that inherit from `@Component` but convey clear architectural roles across your application layers. `@Controller` marks web request handlers, `@Service` holds business logic, and `@Repository` marks data persistence components while enabling automatic **persistence exception translation** into Spring's `DataAccessException` hierarchy. You should use the specific stereotype for each layer to improve code semantics and leverage layer-specific Spring features.",
         explanation: `\`\`\`java
-// BAD — using generic @Component for database access hides persistence errors
+// BAD — plain @Component on a DAO: vendor exceptions leak straight through to callers
 @Component
 public class SqlUserRepository {
-    public User findById(Long id) {
-        // If SQLException is thrown here, Spring won't translate it into a Spring DataAccessException
-        throw new SQLException("Connection timeout");
-    }
-}
-\`\`\`
+    @PersistenceContext
+    private EntityManager entityManager;
 
-\`\`\`java
-// GOOD — @Repository translates vendor-specific SQL exceptions automatically
-@Repository
-public class SqlUserRepository {
     public User findById(Long id) {
-        // Spring automatically translates vendor exceptions (e.g., SQLException, HibernateException)
-        // into uniform Spring DataAccessException types like DataAccessResourceFailureException
+        // A dead connection escapes as a raw Hibernate PersistenceException.
+        // Now OrderService has to import Hibernate just to catch it — the persistence
+        // technology has leaked into your business layer.
         return entityManager.find(User.class, id);
     }
 }
 \`\`\`
 
-**Real-world architecture breakdown:**
-- \`@Controller\` / \`@RestController\` — Web Presentation layer (handles HTTP requests and response serialization)
-- \`@Service\` — Business Logic layer (handles transactions, domain validations, orchestration)
-- \`@Repository\` — Persistence layer (handles SQL/NoSQL DB interaction and exception translation)
-- \`@Component\` — Cross-cutting utilities (file parsers, external API client helpers, validators)`,
+\`\`\`java
+// GOOD — @Repository triggers PersistenceExceptionTranslationPostProcessor
+@Repository
+public class SqlUserRepository {
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    public User findById(Long id) {
+        // Same call, but the bean is proxied: HibernateException / SQLException get rethrown
+        // as Spring's DataAccessException hierarchy (e.g. DataIntegrityViolationException).
+        // Service code catches one exception family no matter which DB sits underneath.
+        return entityManager.find(User.class, id);
+    }
+}
+\`\`\`
+
+**Which stereotype goes where:** \`@Controller\` and \`@RestController\` belong on the web layer, handling HTTP requests and response serialization. \`@Service\` marks the business layer that owns transactions, domain validation, and orchestration. \`@Repository\` marks the persistence layer and buys you the exception translation above. Plain \`@Component\` is the fallback for things that don't sit in any of those tiers — file parsers, external API client wrappers, validators.`,
         followUps: [
           { text: "Are they functionally the same for component scanning?" },
           { text: "What extra behavior does `@Repository` enable (exception translation)?" },
@@ -2214,6 +2214,8 @@ public interface PaymentGateway { void process(); }
 
 @Service
 public class CheckoutService {
+    private final PaymentGateway paymentGateway;
+
     // CRASH: NoUniqueBeanDefinitionException: expected single matching bean but found 2: stripeGateway, paypalGateway
     public CheckoutService(PaymentGateway paymentGateway) {
         this.paymentGateway = paymentGateway;
@@ -2333,19 +2335,17 @@ public class AppConfig {
         id: 48,
         text: "What is component scanning, and how does `@ComponentScan` work?",
         answer: "**Component scanning** is the process where Spring searches your application's classpath for classes annotated with `@Component`, `@Service`, `@Repository`, or `@Controller` and registers them as beans. `@ComponentScan` specifies the base packages to scan; if no package is declared, it defaults to the package of the class containing the `@ComponentScan` annotation. `@SpringBootApplication` automatically includes `@ComponentScan` targeting its own package and all sub-packages. If a bean class lives in a package hierarchy outside the main boot application package, Spring will silently ignore it unless explicitly added to `basePackages`.",
-        explanation: `**Project Package Layout TRAP:**
-\`\`\`
-com.company.app          <-- @SpringBootApplication main class lives here
-  ├── controller
-  └── service
-
-com.company.external     <-- OUTSIDE MAIN PACKAGE!
-  └── LegacyHelper.java  <-- Annotated @Component, but Spring CANNOT find it by default!
-\`\`\`
+        explanation: `The trap is a package layout where a bean sits outside the main class's package tree:
 
 \`\`\`java
-// BAD — Spring boot main class won't pick up com.company.external
-@SpringBootApplication // Scans com.company.app.* ONLY
+// com.company.app          <-- @SpringBootApplication main class lives here
+//   ├── controller
+//   └── service
+// com.company.external     <-- OUTSIDE the main package!
+//   └── LegacyHelper.java  <-- annotated @Component, but Spring never finds it
+
+// BAD — scans com.company.app.* ONLY; LegacyHelper is silently skipped, no warning
+@SpringBootApplication
 public class Application {
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args);
@@ -2417,6 +2417,10 @@ In production Kubernetes or Docker deployments, never hardcode active profiles i
 // BAD — Business logic cluttered with repetitive cross-cutting concerns
 @Service
 public class AccountService {
+    private final AccountRepository accountRepo;
+
+    public AccountService(AccountRepository accountRepo) { this.accountRepo = accountRepo; }
+
     public void transferMoney(Long from, Long to, double amount) {
         long start = System.currentTimeMillis(); // Logging concern
         System.out.println("Checking permissions..."); // Security concern
@@ -2439,6 +2443,9 @@ public class AccountService {
 // GOOD — Core logic remains clean; cross-cutting concerns handled by Spring AOP
 @Service
 public class AccountService {
+    private final AccountRepository accountRepo;
+
+    public AccountService(AccountRepository accountRepo) { this.accountRepo = accountRepo; }
 
     @Transactional // AOP handles transaction start/commit/rollback
     @LogExecutionTime // Custom AOP aspect handles timing and logging
@@ -2447,7 +2454,9 @@ public class AccountService {
         accountRepo.credit(to, amount);
     }
 }
-\`\`\``,
+\`\`\`
+
+**Where you actually meet this:** you use Spring AOP every day without writing an aspect — \`@Transactional\`, \`@Cacheable\`, \`@Async\`, and \`@PreAuthorize\` are all proxy-based advice. That also explains the classic bug: because the advice lives on a **proxy**, a \`@Transactional\` method called via \`this\` from inside the same bean bypasses the proxy entirely and never opens a transaction. Custom aspects are worth writing for genuinely global concerns like request timing or audit logging; anything narrower is usually clearer as a plain method call.`,
         followUps: [
           { text: "What are cross-cutting concerns? Give 3 examples in a real app." },
           { text: "Does Spring AOP use proxies or bytecode weaving by default?" },
@@ -2457,7 +2466,7 @@ public class AccountService {
       {
         id: 51,
         text: "Explain `@Before`, `@After`, `@Around`, and other AOP advice types.",
-        answer: "AOP **advice** defines what action an aspect takes and when that action executes during method execution. **`@Before`** runs before the target method executes; **`@AfterReturning`** runs after successful method execution; **`@AfterThrowing`** runs if the method throws an exception; **`@After` (finally)** runs after completion regardless of outcome. **`@Around`** is the most powerful advice type because it surrounds method invocation completely, allowing you to modify arguments, inspect or modify return values, handle exceptions, or prevent method execution entirely using `ProceedingJoinPoint.proceed()`. ",
+        answer: "AOP **advice** defines what action an aspect takes and when that action executes during method execution. **`@Before`** runs before the target method executes; **`@AfterReturning`** runs after successful method execution; **`@AfterThrowing`** runs if the method throws an exception; **`@After` (finally)** runs after completion regardless of outcome. **`@Around`** is the most powerful advice type because it surrounds method invocation completely, allowing you to modify arguments, inspect or modify return values, handle exceptions, or prevent method execution entirely using `ProceedingJoinPoint.proceed()`.",
         explanation: `\`\`\`java
 // Custom AOP Aspect demonstrating @Around advice for performance logging
 @Aspect
@@ -2516,27 +2525,26 @@ public class PaymentService {
 \`\`\`
 
 \`\`\`java
-// WORKAROUND — Using @Lazy injects a dynamic proxy instead of waiting for bean creation
+// FIXED — Extract the shared responsibility so neither service references the other
+@Service
+public class PaymentConfirmationService { // Owns "tell the customer the payment landed"
+    public void confirm(Long orderId) { /* send email, write audit row */ }
+}
+
 @Service
 public class PaymentService {
-    private final OrderService orderService;
+    // Was OrderService — that reference is what closed the loop
+    private final PaymentConfirmationService confirmations;
 
-    public PaymentService(@Lazy OrderService orderService) {
-        // Spring injects a proxy; real OrderService is instantiated only when first invoked
-        this.orderService = orderService;
+    public PaymentService(PaymentConfirmationService confirmations) {
+        this.confirmations = confirmations;
     }
 }
+// Graph is now a DAG: OrderService -> PaymentService -> PaymentConfirmationService
+// Startup succeeds, and each class has one reason to change
 \`\`\`
 
-\`\`\`java
-// BEST FIX — Refactor! Extract shared logic into a separate AuditNotificationService
-@Service
-public class OrderService {
-    private final PaymentService paymentService;
-    private final AuditNotificationService auditService;
-    // No circle! OrderService -> PaymentService & AuditNotificationService
-}
-\`\`\`
+**The escape hatches, and why they aren't fixes:** \`@Lazy\` on one injection point — \`public PaymentService(@Lazy OrderService orderService)\` — makes Spring inject a proxy that satisfies the constructor immediately and resolves the real bean on first method call. Setter injection works too, since both beans are fully constructed before anything gets wired. Both get the app booting, but the cycle is still in your design: it's no longer visible in the code structure, so the next developer can't see it, and every call through the lazy proxy pays an indirection cost.
 
 **Spring Boot 2.6+ change:** Starting with Spring Boot 2.6, circular dependencies are **forbidden by default** across all injection styles. If legacy code has circular references, you have to explicitly set \`spring.main.allow-circular-references=true\` in \`application.properties\`, but refactoring is the right solution.`,
         followUps: [
@@ -2583,9 +2591,9 @@ public class Application {
 
 **Real-world impact:** In microservice architectures, Spring Boot allows teams to bootstrap new microservices in minutes. Dependency management is simplified because \`spring-boot-starter-parent\` guarantees compatible library versions across your entire tech stack.`,
         followUps: [
-          { text: "What problems does Boot solve that raw Spring still requires boilerplate for?" },
+          { text: "What boilerplate does raw Spring make you write that Boot removes?" },
           { text: "Can you use Spring without Boot? When might you?" },
-          { text: "What is opinionated configuration?" },
+          { text: "What does \"opinionated\" mean here, and how do you override an opinion?" },
         ],
       },
       {
@@ -2618,7 +2626,7 @@ public class Application {
 
 **Production advice:** When building enterprise microservices across multiple teams, create a **custom company starter** (e.g., \`company-boot-starter-logging\`) containing standardized security filters, logging formats, and tracing configurations. This ensures every team adheres to enterprise architecture standards automatically.`,
         followUps: [
-          { text: "Name starters you've used (`web`, `data-jpa`, `security`, `actuator`, etc.)." },
+          { text: "Which starters have you actually used, and what does each pull in?" },
           { text: "What is `spring-boot-starter-parent`, and what does it manage?" },
           { text: "How would you create a custom starter for shared company config?" },
         ],
@@ -2658,8 +2666,8 @@ public class CustomDatabaseConfig {
 **Debugging Tip:** Run your application with the \`--debug\` flag or set \`logging.level.org.springframework.boot.autoconfigure=DEBUG\`. Spring Boot prints a detailed **Conditions Evaluation Report** showing exactly which auto-configurations matched and which ones were negative matches and why.`,
         followUps: [
           { text: "What role do `@ConditionalOnClass`, `@ConditionalOnMissingBean`, etc. play?" },
-          { text: "Where are auto-configuration classes registered (`AutoConfiguration.imports`)?" },
-          { text: "How do you debug which auto-configs were applied (`--debug`, conditions report)?" },
+          { text: "Where does Boot get the list of auto-configuration classes to evaluate?" },
+          { text: "How do you find out which auto-configs applied and which backed off?" },
         ],
       },
       {
@@ -2667,9 +2675,9 @@ public class CustomDatabaseConfig {
         text: "What is `@SpringBootApplication` — what annotations does it combine?",
         answer: "`@SpringBootApplication` is a meta-annotation that combines **`@SpringBootConfiguration`**, **`@EnableAutoConfiguration`**, and **`@ComponentScan`** into a single convenience annotation. `@SpringBootConfiguration` marks the class as a configuration source, `@EnableAutoConfiguration` triggers Spring Boot's automatic configuration mechanism based on classpath dependencies, and `@ComponentScan` activates component scanning starting from the current package. It is placed on the main entry-point class of your application. If you place `@SpringBootApplication` in the wrong package root, Spring Boot won't scan your service components, causing missing bean runtime errors.",
         explanation: `\`\`\`java
-// Equivalent to placing all 3 annotations manually:
+// Close to placing all 3 annotations manually (see the caveat below):
 @SpringBootConfiguration      // Inherits from @Configuration; enables bean definitions
-@EnableAutoConfiguration     // Auto-configures Tomcat, JPA, Jackson, etc.
+@EnableAutoConfiguration      // Auto-configures Tomcat, JPA, Jackson, etc.
 @ComponentScan                // Scans current package and sub-packages for @Component
 public class Application {
     public static void main(String[] args) {
@@ -2689,9 +2697,11 @@ public class NoDbApplication {
 }
 \`\`\`
 
+**The caveat on hand-rolling it:** \`@SpringBootApplication\` also carries \`TypeExcludeFilter\` and \`AutoConfigurationExcludeFilter\` on its \`@ComponentScan\`, so writing the three annotations by hand quietly changes how test slices (\`@WebMvcTest\`, \`@DataJpaTest\`) filter beans. Keep the single annotation and use its \`exclude\`, \`scanBasePackages\`, and \`nameGenerator\` attributes instead.
+
 **Package location rule:** Always place your \`@SpringBootApplication\` annotated class in the **root base package** (e.g., \`com.company.order\`). If you put it inside \`com.company.order.config\`, Spring Boot won't scan sibling packages like \`com.company.order.service\`, causing \`NoSuchBeanDefinitionException\`.`,
         followUps: [
-          { text: "Break down `@SpringBootConfiguration`, `@EnableAutoConfiguration`, and `@ComponentScan`." },
+          { text: "What breaks if the main class sits in a sub-package instead of the root?" },
           { text: "Can you replace `@SpringBootApplication` with its composed annotations?" },
           { text: "How do you exclude a specific auto-configuration?" },
         ],
@@ -2724,17 +2734,13 @@ public class StripePaymentGateway {
 }
 \`\`\`
 
-**Precedence Order (Highest to Lowest):**
-1. Command line arguments (\`--server.port=9090\`)
-2. Environment variables (\`SERVER_PORT=9090\`)
-3. Profile-specific files (\`application-prod.yml\`)
-4. Application files (\`application.yml\`)
+**Precedence, highest wins:** **command-line arguments** (\`--server.port=9090\`) beat everything, then \`SPRING_APPLICATION_JSON\`, then **Java system properties** (\`-Dserver.port=9090\`), then **OS environment variables** (\`SERVER_PORT=9090\`), then **profile-specific files** (\`application-prod.yml\`), then plain \`application.yml\`. At the same level, a file sitting **outside** the jar beats the one packaged inside it. Note the order of the middle two — \`-D\` system properties outrank environment variables, which trips people up because env vars feel more "external".
 
 **Production Trap:** Never commit passwords, API keys, or database credentials into \`application.yml\` in source control. Store secrets in environment variables or cloud key vaults (AWS Secrets Manager, HashiCorp Vault).`,
         followUps: [
-          { text: "What is the property source precedence order (CLI, env, files, defaults)?" },
+          { text: "What is the property source precedence order?" },
           { text: "When would you prefer YAML over properties?" },
-          { text: "How do you inject a property with `@Value` vs `@ConfigurationProperties`?" },
+          { text: "How do you supply a default for a property that might be missing?" },
         ],
       },
       {
@@ -2779,8 +2785,8 @@ public class MailProperties {
 
 **Why it beats \`@Value\`:** If you have 15 configuration properties for an AWS S3 client, injecting 15 individual \`@Value\` fields litters your class with boilerplate. \`@ConfigurationProperties\` groups them into a single re-usable, testable properties object.`,
         followUps: [
-          { text: "How do you enable it (`@EnableConfigurationProperties` / `@ConfigurationPropertiesScan`)?" },
-          { text: "How does it support type-safe nested configuration and validation (`@Validated`)?" },
+          { text: "How do you register a `@ConfigurationProperties` class as a bean?" },
+          { text: "How do nested objects, lists, and startup validation work with it?" },
           { text: "Why is it preferred over many `@Value` injections for groups of related properties?" },
         ],
       },
@@ -2814,14 +2820,18 @@ spring:
 \`\`\`
 
 \`\`\`bash
-# Activating production profile when launching the executable JAR
-java -jar -Dspring.profiles.active=prod order-service.jar
+# Activating production profile when launching the executable JAR.
+# JVM args go BEFORE -jar: anything after -jar is read as the jar name, then as app args.
+java -Dspring.profiles.active=prod -jar order-service.jar
+
+# Or as a Spring command-line argument (highest precedence of all):
+java -jar order-service.jar --spring.profiles.active=prod
 \`\`\`
 
 **Production best practice:** Keep \`application-prod.yml\` clean of plaintext secrets. Use placeholder references like \`password: \${DB_PASSWORD}\` and let Kubernetes or Docker inject \`DB_PASSWORD\` as an environment variable at container startup.`,
         followUps: [
           { text: "How do profile-specific files and `spring.profiles.active` work together?" },
-          { text: "How would you keep secrets out of Git for prod (env vars, vault, etc.)?" },
+          { text: "How do you keep prod secrets out of Git?" },
           { text: "What is the difference between multi-document YAML and separate profile files?" },
         ],
       },
@@ -2849,9 +2859,9 @@ logging.level.web=DEBUG
 
 **Important gotcha:** DevTools triggers automatic restarts only when classpath files change. If using IntelliJ IDEA, you must press \`Ctrl+F9\` (or \`Cmd+F9\` on Mac) to compile your modified Java files, or enable "Build project automatically" in settings.`,
         followUps: [
-          { text: "What features does DevTools provide (auto-restart, LiveReload, property defaults)?" },
+          { text: "Which property defaults does DevTools change in development?" },
           { text: "Is DevTools included in production builds by default?" },
-          { text: "What is the difference between restart and reload classloaders?" },
+          { text: "What is the difference between the base and restart classloaders?" },
         ],
       },
       {
@@ -2934,7 +2944,7 @@ public class PaymentGatewayHealthIndicator implements HealthIndicator {
 
 **Kubernetes Integration:** In cloud environments, Kubernetes uses \`/actuator/health/liveness\` to check if the pod container should be restarted, and \`/actuator/health/readiness\` to check if the pod can accept incoming web traffic.`,
         followUps: [
-          { text: "What interface or base class do you implement (`HealthIndicator`)?" },
+          { text: "How do you stop a slow dependency check from hanging `/health`?" },
           { text: "When would you mark a custom check as DOWN vs OUT_OF_SERVICE?" },
           { text: "How does readiness vs liveness differ in Kubernetes health probes?" },
         ],
@@ -2966,7 +2976,7 @@ public class PaymentGatewayHealthIndicator implements HealthIndicator {
 
 **When to switch servers:** Undertow offers a lower memory footprint and higher concurrency handling for heavy I/O workloads compared to Tomcat. Netty is used exclusively when building non-blocking, reactive applications using Spring WebFlux.`,
         followUps: [
-          { text: "What is the default embedded server for `spring-boot-starter-web`?" },
+          { text: "What happens if two embedded server starters land on the classpath?" },
           { text: "How do you switch from Tomcat to Jetty or Undertow?" },
           { text: "When would you deploy as WAR to an external server instead?" },
         ],
@@ -3035,7 +3045,7 @@ public class OrderService {
 
 **Performance Trap:** Avoid string concatenation inside log statements (\`log.debug("Processing order " + id)\`). String concatenation evaluates immediately regardless of whether DEBUG level is enabled! Always use parameterized anchors (\`log.debug("Processing order {}", id)\`).`,
         followUps: [
-          { text: "What is the default logging framework, and how does Logback fit in?" },
+          { text: "How do SLF4J and Logback relate to each other?" },
           { text: "How do you set package-level log levels in `application.yml`?" },
           { text: "How do you use a custom `logback-spring.xml` with profiles?" },
         ],
@@ -3078,7 +3088,7 @@ public class CacheWarmupRunner implements ApplicationRunner {
         followUps: [
           { text: "When do these runners execute in the application lifecycle?" },
           { text: "How do you control order when multiple runners exist?" },
-          { text: "When would you use them for startup data seeding?" },
+          { text: "What are the risks of doing heavy work inside a runner?" },
         ],
       },
       {
@@ -3104,14 +3114,15 @@ public class ServletInitializerApplication extends SpringBootServletInitializer 
 
 \`\`\`bash
 # Executing an executable Fat JAR in Docker / Production
-java -jar -Dserver.port=8080 target/order-service-1.0.0.jar
+# JVM args (-D, -Xmx) come BEFORE -jar; Spring args (--key=value) come AFTER the jar name
+java -Xmx512m -jar target/order-service-1.0.0.jar --server.port=8080
 \`\`\`
 
 **How executable JARs work internally:**
 Spring Boot uses a custom \`JarLauncher\` that allows nesting JAR dependencies inside \`BOOT-INF/lib/\` within a single ZIP structure without needing to explode dependencies onto host file systems.`,
         followUps: [
           { text: "What is an executable fat/uber JAR?" },
-          { text: "What changes are needed to package as WAR (`SpringBootServletInitializer`)?" },
+          { text: "What changes are needed to package as a deployable WAR?" },
           { text: "How do you run a Boot JAR with external config?" },
         ],
       },
@@ -3147,8 +3158,8 @@ public class UserRestController {
 
 **Common mistake:** If you annotate a REST controller with \`@Controller\` instead of \`@RestController\` and forget \`@ResponseBody\` on methods, Spring will interpret the returned string as a view template name, throwing a \`404 Not Found\` or \`Circular view path\` exception!`,
         followUps: [
-          { text: "Does `@RestController` include `@ResponseBody` on every method?" },
-          { text: "When would you still use `@Controller` (e.g., MVC views / Thymeleaf)?" },
+          { text: "What happens if a `@Controller` method returns a `String` without `@ResponseBody`?" },
+          { text: "When would you still reach for plain `@Controller`?" },
           { text: "Can you mix both in the same application?" },
         ],
       },
@@ -3201,11 +3212,16 @@ public List<User> getUsers() { ... }   // a DELETE to /users also lands here —
 @RestController
 @RequestMapping("/api/users")   // class-level base path, no method = fine here
 public class UserController {
-    @GetMapping("/{id}")    // GET only
-    @PostMapping            // POST only
-    @PutMapping("/{id}")    // PUT only
-    @DeleteMapping("/{id}") // DELETE only
+    @GetMapping("/{id}")                       // GET /api/users/42 only
+    public User get(@PathVariable Long id) { ... }
+
+    @PostMapping                               // POST /api/users only
+    public User create(@RequestBody UserDto dto) { ... }
+
+    @DeleteMapping("/{id}")                    // DELETE /api/users/42 only
+    public void delete(@PathVariable Long id) { ... }
 }
+// One verb per method — these annotations are NOT stackable on a single method
 \`\`\`
 
 \`@GetMapping\` is literally \`@RequestMapping(method = GET)\` under the hood — it's pure sugar, but the sugar is what stops you from exposing unintended verbs. In a code review, a bare \`@RequestMapping("/x")\` on a method is an automatic flag.`,
@@ -3280,7 +3296,7 @@ Both conversions run through an **\`HttpMessageConverter\`** — \`MappingJackso
         explanation: `\`\`\`java
 // WRONG — no validation, garbage data hits your service/DB
 public Order create(@RequestBody CreateOrderRequest req) {
-    orderService.save(req); // req.email could be null or ""
+    return orderService.save(req); // req.email could be null or ""
 }
 \`\`\`
 
@@ -3316,14 +3332,16 @@ public class OrderController {
         explanation: `\`\`\`java
 // WITHOUT global handling — every controller repeats try/catch, inconsistent errors
 @PostMapping("/users")
-public User create(@RequestBody User u) {
+public ResponseEntity<?> create(@RequestBody User u) {   // note the wildcard return type
     try {
-        return service.create(u);
+        return ResponseEntity.ok(service.create(u));
     } catch (DuplicateEmailException e) {
-        // hand-built response, copy-pasted everywhere
+        // hand-built response, copy-pasted into every controller
         return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
     }
 }
+// The ResponseEntity<?> is itself a smell — the method's type no longer
+// documents what it returns, because it returns two different shapes.
 \`\`\`
 
 \`\`\`java
@@ -3680,10 +3698,7 @@ JDBC / DB Driver  ← actual DB connection
 Database
 \`\`\`
 
-A real example: you call \`userRepository.findByEmail(email)\`.
-- Spring Data JPA parses the method name and builds a JPQL query
-- JPA's \`EntityManager.createQuery()\` is invoked with that JPQL
-- Hibernate translates it to \`SELECT * FROM users WHERE email = ?\` and fires it via JDBC
+A real example: you call \`userRepository.findByEmail(email)\`. **Spring Data JPA** parses the method name and builds a JPQL query. That JPQL goes into **JPA's** \`EntityManager.createQuery()\`. **Hibernate** then translates it to \`SELECT ... FROM users WHERE email = ?\` and fires it through JDBC.
 
 **The vendor lock-in question comes up in interviews:** If you stick to standard JPA annotations (\`@Entity\`, \`@OneToMany\`) and avoid Hibernate-specific extensions (\`@BatchSize\`, \`@Cache\`), you could theoretically swap Hibernate for EclipseLink. Nobody does this in practice, but understanding the layer separation matters when you read docs and trace bugs.`,
         followUps: [
@@ -3696,16 +3711,24 @@ A real example: you call \`userRepository.findByEmail(email)\`.
         id: 86,
         text: "What is the difference between `JpaRepository`, `CrudRepository`, and `PagingAndSortingRepository`?",
         answer:
-          "`CrudRepository` provides the 7 core CRUD methods. `PagingAndSortingRepository` extends it with `findAll(Pageable)` and `findAll(Sort)`. `JpaRepository` extends both and adds JPA-specific methods: `flush`, `saveAndFlush`, batch deletes, and — crucially — returns `List<T>` instead of `Iterable<T>`. Always extend `JpaRepository` in production; you'll eventually need pagination or flush control and retrofitting costs refactors.",
+          "`CrudRepository` provides the 7 core CRUD methods. `PagingAndSortingRepository` adds `findAll(Pageable)` and `findAll(Sort)` — note that since **Spring Data 3.0 it no longer extends `CrudRepository`**; the two are independent. `JpaRepository` extends both branches and adds JPA-specific methods: `flush`, `saveAndFlush`, batch deletes, and — crucially — returns `List<T>` instead of `Iterable<T>`. Always extend `JpaRepository` in production; you'll eventually need pagination or flush control and retrofitting costs refactors.",
         explanation: `The hierarchy:
 
 \`\`\`
-CrudRepository          → save, findById, findAll (Iterable), delete, count
+Spring Data 3.x (Boot 3) — these two are now SEPARATE branches:
+
+CrudRepository              → save, findById, findAll (Iterable), delete, count
+PagingAndSortingRepository  → findAll(Pageable), findAll(Sort)
+                              (no longer extends CrudRepository as it did in 2.x)
+
+ListCrudRepository / ListPagingAndSortingRepository
+                            → same, but List<T> instead of Iterable<T>
     ↑
-PagingAndSortingRepository → + findAll(Pageable), findAll(Sort)
-    ↑
-JpaRepository           → + saveAll, flush, saveAndFlush, deleteInBatch,
-                            deleteAllInBatch, getById — and findAll returns List<T>
+JpaRepository               → extends BOTH List* variants, and adds
+                              saveAll, flush, saveAndFlush, deleteAllInBatch,
+                              getReferenceById
+                              (getById and deleteInBatch are deprecated —
+                               don't reach for them in a Boot 3 codebase)
 \`\`\`
 
 The \`Iterable<T>\` vs \`List<T>\` difference is the most annoying in practice:
@@ -3818,29 +3841,26 @@ for (Order o : orders) {
 // 50 orders = 51 queries total. N+1.
 \`\`\`
 
-Fix 1: \`JOIN FETCH\` in JPQL — one query:
+Three fixes, cheapest last:
 
 \`\`\`java
+// FIX 1 — JOIN FETCH in JPQL: one query, full control over what's loaded
 @Query("SELECT DISTINCT o FROM Order o JOIN FETCH o.items")
 List<Order> findAllWithItems();
 // Single query: SELECT o.*, i.* FROM orders o JOIN items i ON i.order_id = o.id
-\`\`\`
 
-Fix 2: \`@EntityGraph\` for cleaner repository signatures:
-
-\`\`\`java
+// FIX 2 — @EntityGraph: same JOIN FETCH, cleaner repository signature
 @EntityGraph(attributePaths = {"items"})
-List<Order> findAll(); // Spring generates the JOIN FETCH for you
-\`\`\`
+List<Order> findAll(); // Spring generates the fetch join for you
 
-Fix 3: \`@BatchSize\` — cheapest, no query changes needed:
-
-\`\`\`java
+// FIX 3 — @BatchSize on the association: no query changes at all
 @OneToMany
 @BatchSize(size = 25) // 50 orders = 2 IN-clause queries instead of 50
 private List<Item> items;
 // Or globally: hibernate.default_batch_fetch_size=25
 \`\`\`
+
+For a **read-only endpoint** none of these are ideal — if you only need an order id and a total, a DTO projection (\`SELECT new com.app.OrderSummary(o.id, o.total) FROM Order o\`) skips entity hydration entirely and never touches the association.
 
 **Detection:** enable \`spring.jpa.show-sql=true\` and count the \`SELECT\` statements in logs. In tests, use Hypersistence Optimizer or assert query count with p6spy. Never discover N+1 in production — it's a perf cliff, not a gradual degradation.`,
         followUps: [
@@ -3903,12 +3923,13 @@ Optional<Order> findWithUser(@Param("id") Long id);
 public class Order {
     @Id Long id;
 
-    // owning side — no mappedBy, holds the FK in the DB
+    // owning side — no mappedBy, holds the user_id FK in the orders table
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
-    // owning side of the one-to-many from Order's perspective
+    // INVERSE side — mappedBy = "order" means "Item.order owns this relationship".
+    // Hibernate reads Item.order to write the FK; it never writes anything from this list.
     @OneToMany(mappedBy = "order", cascade = CascadeType.PERSIST)
     private List<Item> items = new ArrayList<>();
 }
@@ -4187,27 +4208,27 @@ Phantom Read     | Range query returns different rows later    | SERIALIZABLE
 Practical example of non-repeatable read (the silent bug):
 
 \`\`\`java
+// @Query("SELECT a.balance FROM Account a WHERE a.id = :id")
+// BigDecimal findBalanceById(@Param("id") Long id);
+
 @Transactional(isolation = Isolation.READ_COMMITTED) // default
-public void checkAndCharge() {
-    Account acc = accountRepo.findById(id);
-    // READ 1: balance = 1000
-
-    // ... some business logic ...
-
-    Account acc2 = accountRepo.findById(id); // same query, same txn
-    // READ 2: balance = 500 — another transaction updated it!
-    // acc.getBalance() != acc2.getBalance() at READ_COMMITTED
+public void checkAndCharge(Long id) {
+    BigDecimal first = accountRepo.findBalanceById(id);  // READ 1: 1000
+    // ... business logic; meanwhile another txn commits a withdrawal ...
+    BigDecimal second = accountRepo.findBalanceById(id); // READ 2: 500 — changed!
+    // At READ_COMMITTED every statement sees the latest COMMITTED data,
+    // so first != second inside ONE transaction. Non-repeatable read.
 }
 
 // Fix: REPEATABLE_READ — both reads see the same MVCC snapshot.
 // Nothing is locked; the writer still commits. You just don't SEE the change.
 @Transactional(isolation = Isolation.REPEATABLE_READ)
-public void checkAndCharge() { ... } // READ 1 == READ 2, guaranteed
-
-// Careful: a consistent READ is not a safe WRITE. If you read the balance
-// and then decrement it, you need @Version (optimistic) or SELECT ... FOR
-// UPDATE (pessimistic). Isolation alone won't stop lost updates.
+public void checkAndCharge(Long id) { ... } // READ 1 == READ 2, guaranteed
 \`\`\`
+
+**Why a scalar projection, not \`findById\` twice:** calling \`findById(id)\` twice in one transaction would *not* show this anomaly — Hibernate's first-level cache returns the same instance for the second call without touching the DB, hiding the change. The persistence context gives you repeatable reads for whole entities regardless of the DB isolation level, so you need a scalar query (or \`em.refresh()\`) to observe what the database is actually doing.
+
+**A consistent read is still not a safe write.** If you read the balance and then decrement it, raising isolation doesn't save you — you need \`@Version\` (optimistic) or \`SELECT ... FOR UPDATE\` (pessimistic). Isolation alone won't stop lost updates.
 
 **Production advice:** Don't change isolation level speculatively. Understand your exact consistency requirement, prove READ_COMMITTED is insufficient, then raise it. Every level above READ_COMMITTED trades throughput for correctness.`,
         followUps: [
@@ -4223,42 +4244,30 @@ public void checkAndCharge() { ... } // READ 1 == READ 2, guaranteed
           "Flyway and Liquibase manage **versioned, incremental SQL scripts** that run in order on startup — every schema change is tracked, checksummed, and recorded in a history table. They replace `ddl-auto=update`, which is unpredictable in production (never drops columns, no history, not reviewable). Flyway uses `V{version}__{desc}.sql` files; Liquibase uses XML/YAML changesets. Both run before your app starts, so the schema is always in sync with your code.",
         explanation: `Flyway naming and workflow:
 
-\`\`\`
-src/main/resources/db/migration/
-  V1__create_users_table.sql
-  V2__add_email_to_users.sql
-  V3__create_orders_table.sql
-  V4__add_user_id_index.sql
-\`\`\`
-
 \`\`\`sql
+-- Files live in src/main/resources/db/migration/ and run in version order:
+--   V1__create_users_table.sql
+--   V2__add_email_to_users.sql
+--   V3__create_orders_table.sql
+--   V4__add_user_id_index.sql
+
 -- V2__add_email_to_users.sql
 ALTER TABLE users ADD COLUMN email VARCHAR(255);
 CREATE UNIQUE INDEX idx_users_email ON users(email);
 \`\`\`
 
-Flyway tracks this in \`flyway_schema_history\`:
-
-\`\`\`
-version | description           | checksum   | success
---------|-----------------------|------------|--------
-1       | create users table    | 123456789  | true
-2       | add email to users    | 987654321  | true
-\`\`\`
-
-If you edit \`V2__\` after it's been applied, Flyway detects the checksum mismatch and **refuses to start** — the safety net that prevents silent schema drift.
+Flyway records each applied file in a \`flyway_schema_history\` table — version, description, a **checksum** of the file contents, and whether it succeeded. If you edit \`V2__\` after it's already been applied somewhere, the checksum no longer matches the recorded one and Flyway **refuses to start**. That's the safety net against silent schema drift: migrations are append-only, so fixing a mistake means adding \`V5__\`, never editing \`V2__\`.
 
 **vs \`ddl-auto=update\`:**
 
-\`\`\`yaml
-# NEVER in production
+\`\`\`properties
+# NEVER in production: adds columns but never removes them, leaves no audit
+# trail, drifts between environments, and isn't reviewable in a pull request
 spring.jpa.hibernate.ddl-auto=update
-# Problems: adds columns, never removes them, no audit trail,
-# non-deterministic across environments, not reviewable in PRs
 
-# USE INSTEAD:
-spring.jpa.hibernate.ddl-auto=validate  # just checks schema matches entity
-# Let Flyway own the schema changes
+# USE INSTEAD — validate only checks that the schema matches your entities
+# and fails startup if it doesn't. Flyway owns the actual changes.
+spring.jpa.hibernate.ddl-auto=validate
 \`\`\``,
         followUps: [
           { text: "Why prefer migrations over `ddl-auto=update` in production?" },
@@ -4274,19 +4283,17 @@ spring.jpa.hibernate.ddl-auto=validate  # just checks schema matches entity
         explanation: `What happens without a pool:
 
 \`\`\`
+WITHOUT A POOL
 Request 1 → CREATE connection (30-100ms) → query → CLOSE connection
 Request 2 → CREATE connection (30-100ms) → query → CLOSE connection
 // 100 concurrent users = 100 new DB connections per request cycle
 // DB server limit: 100 connections total → queue builds → timeouts
-\`\`\`
 
-With HikariCP:
-
-\`\`\`
+WITH HIKARICP
 Startup: CREATE 10 connections, hold them open
 Request 1 → BORROW connection (microseconds) → query → RETURN to pool
 Request 2 → BORROW same connection → query → RETURN
-// 100 concurrent users share 10 connections with queueing
+// 100 concurrent users share 10 connections, queueing when all are busy
 \`\`\`
 
 Key HikariCP settings:
