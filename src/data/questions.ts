@@ -13,7 +13,7 @@ export const categories: Category[] = [
         id: 1,
         text: "What is the difference between `==` and `.equals()` in Java?",
         answer:
-            "`==` compares **references** — it checks whether two variables point to the exact same object in memory. `.equals()` compares **content** — what the object actually represents.\n\nFor primitives like `int` or `char`, `==` compares values directly because primitives live on the stack, not the heap. For objects, you almost always want `.equals()`.",
+            "`==` compares **references** — it checks whether two variables point to the exact same object in memory. `.equals()` compares **content** — what the object actually represents.\n\nFor primitives like `int` or `char`, `==` compares the actual values, because a primitive **holds its value directly** instead of pointing at an object — there's no separate identity to confuse it with. For objects, you almost always want `.equals()`.",
         explanation: `**Analogy:** Think of two people who both own a copy of the same book. They are holding different physical objects (different references), but the content is identical. \`==\` asks "are you holding the exact same physical book?", while \`.equals()\` asks "do your books have the same content?"
 
 \`\`\`java
@@ -98,7 +98,7 @@ public abstract class BaseRepository {
     
     public abstract List<?> findAll(); // must implement
     
-    protected Connection getConnection() { // shared impl
+    protected Connection getConnection() throws SQLException { // shared impl
         return dataSource.getConnection();
     }
 }
@@ -153,7 +153,7 @@ List<User> users = new ArrayList<>(10_000);
         id: 5,
         text: "How does `HashMap` work internally? What happens on collision?",
         answer:
-            "`HashMap` internally uses an **array of buckets** (Entry[]). When you call `put(key, value)`, it calls `key.hashCode()`, applies a bit-mixing function, and takes `hash % capacity` to find the bucket index.\n\nIf two keys land in the same bucket (collision), they form a chain. Before Java 8, that chain was a **linked list** — worst case O(n) per operation. Since Java 8, when a bucket's chain exceeds 8 entries, it **converts to a red-black tree**, reducing worst-case to O(log n).\n\nWhen the map's fill exceeds `capacity × loadFactor` (default 0.75), it **rehashes** — doubles the array and redistributes all entries.",
+            "`HashMap` internally uses an **array of buckets** (Entry[]). When you call `put(key, value)`, it calls `key.hashCode()`, mixes the high bits down with `h ^ (h >>> 16)`, then masks with `(capacity - 1)` to get the bucket index. Capacity is always a **power of two**, which is what makes that mask a fast stand-in for `hash % capacity`.\n\nIf two keys land in the same bucket (collision), they form a chain. Before Java 8, that chain was a **linked list** — worst case O(n) per operation. Since Java 8, when a bucket's chain exceeds 8 entries, it **converts to a red-black tree**, reducing worst-case to O(log n).\n\nWhen the map's fill exceeds `capacity × loadFactor` (default 0.75), it **rehashes** — doubles the array and redistributes all entries.",
         explanation: `**Analogy:** Imagine a building with 16 floors (buckets). When you store something, the receptionist looks at your name tag (hashCode), does some math, and sends you to a floor. If floor 7 already has people (collision), they sit in a row of chairs (linked list) — or if it gets really crowded, they get an organized seating chart (red-black tree). Rehashing is the building expanding to 32 floors and everyone moving to potentially different floors.
 
 **The key thing that breaks HashMap:** If your key's hashCode() always returns the same value — every entry lands in one bucket, turning your map into a linked list. O(n) for every get. This is actually a known denial-of-service vector in web apps where user-controlled input becomes map keys.
@@ -276,7 +276,7 @@ public final class BrokenRange {
 
 // Caller can mutate your "immutable" object:
 List<Integer> list = new ArrayList<>(Arrays.asList(1, 2, 3));
-  BrokenRange range = new BrokenRange(list);
+BrokenRange range = new BrokenRange(list);
 list.add(99); // NOW range.getValues() has 4 elements!
 
 // FIXED — defensive copies in and out
@@ -421,7 +421,7 @@ try (
 Map<String, Integer> counts = new HashMap<>();
 int count = counts.get("nonexistent"); // get() returns null, unboxing null → NPE
 // Fix:
-int count = counts.getOrDefault("nonexistent", 0); // safe
+int safeCount = counts.getOrDefault("nonexistent", 0); // safe
 \`\`\`
 
 **The Integer cache surprise:**
@@ -447,9 +447,9 @@ int sum = nums.stream()
               .reduce(0, Integer::sum); // constant boxing/unboxing
 
 // GOOD — use primitive stream
-int sum = nums.stream()
-              .mapToInt(Integer::intValue) // unbox once
-              .sum(); // no more boxing
+int fastSum = nums.stream()
+                  .mapToInt(Integer::intValue) // unbox once
+                  .sum(); // no more boxing
 \`\`\``,
         followUps: [
           { text: "What is the difference between `int` and `Integer` in terms of memory and nullability?" },
@@ -461,7 +461,7 @@ int sum = nums.stream()
         id: 12,
         text: "What is the difference between `final`, `finally`, and `finalize()`?",
         answer:
-            "These three have nothing to do with each other beyond sharing the word 'final'. **`final`** is a modifier: on a variable = can't reassign, on a method = can't override, on a class = can't extend. **`finally`** is a block in exception handling that always runs after try/catch, regardless of whether an exception was thrown — used for cleanup.\n\n**`finalize()`** was a method on `Object` called by the GC before collecting an object — it was **deprecated in Java 9** and removed in Java 18 because it was unreliable, slow, and caused GC pauses. Use `AutoCloseable` + try-with-resources instead.",
+            "These three have nothing to do with each other beyond sharing the word 'final'. **`final`** is a modifier: on a variable = can't reassign, on a method = can't override, on a class = can't extend. **`finally`** is a block in exception handling that always runs after try/catch, regardless of whether an exception was thrown — used for cleanup.\n\n**`finalize()`** was a method on `Object` called by the GC before collecting an object — it was **deprecated in Java 9** and **deprecated for removal in Java 18** (JEP 421), which also added a `--finalization=disabled` flag to switch it off entirely. It's unreliable, slow, and delays reclamation — an object with a finalizer needs two GC cycles to die. Use `AutoCloseable` + try-with-resources instead.",
         explanation: `**final — three distinct uses:**
 
 \`\`\`java
@@ -653,12 +653,13 @@ List<String> allItems = orders.stream()
 **flatMap on Optional — the monadic use:**
 
 \`\`\`java
-// Without flatMap — returns Optional<Optional<String>>
-Optional<String> city = user
-    .map(User::getAddress)      // Optional<Address>
-    .map(Address::getCity);     // Optional<Optional<String>> — wrong!
+// User.getAddress() returns Optional<Address> — that return type is what nests
+Optional<User> user = userRepository.findById(id);
 
-// With flatMap — stays Optional<String>
+// map() wraps a value that is ALREADY an Optional
+Optional<Optional<Address>> nested = user.map(User::getAddress); // wrong shape
+
+// flatMap() unwraps one layer — stays flat
 Optional<String> city = user
     .flatMap(User::getAddress)  // Optional<Address>
     .map(Address::getCity);     // Optional<String> — correct
@@ -861,7 +862,12 @@ public class DbDriver {
         // Runs when class is first loaded
         // Order: static block → instance block → constructor
         System.out.println("Loading DB driver...");
-        Class.forName("com.mysql.cj.jdbc.Driver");
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            // a static block can't throw checked exceptions — wrap or the class won't load
+            throw new ExceptionInInitializerError(e);
+        }
     }
 }
 \`\`\`
@@ -888,7 +894,9 @@ when(service.get(1L)).thenReturn(user);
         text: "What are Java generics and why are they used?",
         answer:
             "Generics let you write **type-safe, reusable code** by parameterizing classes and methods with type placeholders. Instead of `List list` (where you could accidentally mix types), you write `List<String>` — the compiler enforces that only Strings go in and come out.\n\nAt **runtime, generics are erased** (type erasure) — `List<String>` becomes `List` in bytecode. This is why you can't do `new T[]`, `instanceof T`, or `T.class` at runtime — the JVM doesn't know what `T` is anymore.",
-        explanation: `**Why generics exist — the pre-generics pain:**
+        explanation: `**Analogy:** A generic type is the label on a storage crate. \`List<String>\` is a crate stamped "STRINGS ONLY", and the compiler checks every item going in. **Type erasure** is that label being peeled off before the crate ships to the warehouse — at runtime it's just a crate, which is why no one can read the label back.
+
+**Why generics exist — the pre-generics pain:**
 
 \`\`\`java
 // Pre-Java 5 — no type safety
@@ -944,7 +952,9 @@ void addNumbers(List<? super Integer> list) {
         text: "What is the volatile keyword used for?",
         answer:
             "`volatile` guarantees **visibility** — when one thread writes to a volatile variable, the new value is immediately visible to all other threads. Without it, threads may read stale values from their CPU cache.\n\nWhat `volatile` does NOT guarantee: **atomicity**. `count++` is a read-modify-write operation — even if `count` is volatile, two threads doing `count++` simultaneously can both read the same value and both write the same result, losing an increment. Use `AtomicInteger` for thread-safe incrementing, and `synchronized` when you need to protect a multi-step critical section.",
-        explanation: `**The visibility problem volatile solves:**
+        explanation: `**Analogy:** Every CPU core keeps a private scratchpad copy of a shared value. \`volatile\` is the rule "always read the noticeboard, never your scratchpad" — so everyone sees the same value. What it does **not** do is stop two people scribbling on the noticeboard at the same moment, which is why \`count++\` still loses updates.
+
+**The visibility problem volatile solves:**
 
 \`\`\`java
 // Without volatile — this loop may run forever
@@ -1009,7 +1019,7 @@ class Singleton {
         id: 23,
         text: "Explain the basics of multithreading — `Thread` vs `Runnable`.",
         answer:
-            "Prefer `Runnable` over extending `Thread`. Extending `Thread` burns your only inheritance slot and tightly couples the task to the threading mechanism. `Runnable` separates what to do from how it runs — you can pass the same `Runnable` to a thread pool, a timer, or a new `Thread`.\n\n`Callable<T>` is like `Runnable` but can return a value and throw checked exceptions. In modern Java, you almost never directly extend `Thread` — you pass `Runnable` or `Callable` to an `ExecutorService`.",
+            "A `Thread` is the **unit of execution** the OS schedules; a `Runnable` is just the **task** you want run. **Prefer `Runnable`** — extending `Thread` burns your one inheritance slot and welds the task to the threading mechanism, while `Runnable` separates *what to do* from *how it runs*, so the same task can go to a thread pool, a scheduler, or a plain `Thread`.\n\n`Callable<T>` is like `Runnable` but **returns a value and can throw checked exceptions**. In modern Java you almost never extend `Thread` directly — you hand a `Runnable` or `Callable` to an `ExecutorService`.",
         explanation: `**The extends Thread approach — don't do this:**
 
 \`\`\`java
@@ -1094,9 +1104,12 @@ private int count = 0;
 public void increment() { count++; }
 
 // With synchronization — atomic read-modify-write
-public synchronized void increment() { count++; }
+private int safeCount = 0;
+public synchronized void incrementSafely() { safeCount++; }
+
 // Or use AtomicInteger — faster, no lock needed
-private AtomicInteger count = new AtomicInteger(0);
+private final AtomicInteger atomicCount = new AtomicInteger(0);
+public void incrementAtomically() { atomicCount.incrementAndGet(); }
 \`\`\`
 
 **The lock object matters:** Don't synchronize on public objects or literals — someone else could lock on the same object and create unexpected deadlocks. Use a private dedicated lock object:
@@ -1114,7 +1127,7 @@ synchronized (lock) { ... } // safer than synchronized (this)
         id: 25,
         text: "What are `ExecutorService` and thread pools?",
         answer:
-            "`ExecutorService` is the standard Java API for managing a pool of reusable threads. Instead of creating a new `Thread` for every task (expensive — OS thread creation costs ~1ms and ~1MB stack), you submit tasks to a pool that recycles threads.\n\n`execute(Runnable)` is fire-and-forget — no return value. `submit(Callable)` returns a `Future<T>` that you can use to get the result, check completion, or cancel.\n\nIn Spring Boot, `@Async` methods use an `ExecutorService` under the hood, and you configure it via a `ThreadPoolTaskExecutor` bean.",
+            "`ExecutorService` is the standard Java API for managing a **pool of reusable threads**. Instead of creating a new `Thread` per task (expensive — roughly **1ms to start and ~1MB of stack** each), you submit tasks to a pool that recycles its threads.\n\n**`execute(Runnable)`** is fire-and-forget — no return value. **`submit(Callable)`** returns a **`Future<T>`** you can use to get the result, check completion, or cancel.\n\nIn Spring Boot, `@Async` methods run on an `ExecutorService` under the hood, configured via a **`ThreadPoolTaskExecutor`** bean.",
         explanation: `**The cost of creating threads manually:**
 
 \`\`\`java
@@ -1184,10 +1197,17 @@ public class EmailService {
 Object lockA = new Object();
 Object lockB = new Object();
 
+// sleep() throws InterruptedException, and a Runnable can't declare checked
+// exceptions — so the catch is mandatory, not decoration
+static void pause() {
+    try { Thread.sleep(100); }
+    catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+}
+
 // Thread 1: acquires A, then tries to get B
 Thread t1 = new Thread(() -> {
     synchronized (lockA) {
-        Thread.sleep(100); // simulate work
+        pause(); // simulate work — lets T2 grab lockB first
         synchronized (lockB) { // WAITING — Thread 2 holds B
             System.out.println("T1 done");
         }
@@ -1197,7 +1217,7 @@ Thread t1 = new Thread(() -> {
 // Thread 2: acquires B, then tries to get A
 Thread t2 = new Thread(() -> {
     synchronized (lockB) {
-        Thread.sleep(100);
+        pause();
         synchronized (lockA) { // WAITING — Thread 1 holds A
             System.out.println("T2 done");
         }
@@ -1251,7 +1271,9 @@ if (lockA.tryLock(1, TimeUnit.SECONDS)) {
         text: "What is garbage collection in Java, and how does it work at a high level?",
         answer:
             "Java's garbage collector automatically reclaims memory for objects that are no longer reachable from any live thread or static variable. It works on the **generational hypothesis**: most objects die young.\n\nThe heap is split into **Young Generation** (new objects) and **Old Generation** (long-lived objects). Minor GC runs frequently to clean up Eden space (where new objects are born) — it's fast because most objects are already dead. Major/Full GC cleans the Old Generation — it's slower and pauses the application.\n\nModern collectors like G1GC and ZGC reduce pause times by doing most work concurrently with the application.",
-        explanation: `**The generational heap — how objects move:**
+        explanation: `**Analogy:** A restaurant kitchen during service. Most dishes are plated and cleared within minutes — that's **Eden**, swept constantly and cheaply because almost everything on it is already rubbish. The few things that survive all night (stockpots, sauces) get moved to a back shelf — the **old generation** — and are only touched during a deep clean, because re-checking them every five minutes would be wasted work.
+
+**The generational heap — how objects move:**
 
 Young Gen (Eden → Survivor 1 → Survivor 2) → Old Gen → (never collected = memory leak)
 
@@ -1341,7 +1363,7 @@ if (image == null) {
         text: "Explain the four pillars of OOP with examples.",
         answer:
             "**Encapsulation** — bundle state and behavior together, hide internal details. A `BankAccount` class exposes `deposit()` and `withdraw()` but keeps `balance` private. **Abstraction** — expose only what's necessary, hide complexity. A `PaymentService` interface exposes `processPayment()` — callers don't know if it talks to Stripe or PayPal.\n\n**Inheritance** — a subclass inherits and extends a parent's behavior. `SavingsAccount extends BankAccount` adds interest calculation. **Polymorphism** — the same interface behaves differently based on the actual type. A `List<PaymentProcessor>` can hold Stripe, PayPal, and Apple Pay processors, all called the same way.",
-        explanation: `> **Analogy:** A car. **Encapsulation** — the engine is sealed under the hood; you get a pedal, not a fuel-injection dial. **Abstraction** — the pedal means "go faster" whether it's petrol, diesel or electric underneath. **Inheritance** — an ambulance is a van with extra kit, not a vehicle redesigned from scratch. **Polymorphism** — any driver can drive any car, because the controls honour the same contract.
+        explanation: `**Analogy:** A car. **Encapsulation** — the engine is sealed under the hood; you get a pedal, not a fuel-injection dial. **Abstraction** — the pedal means "go faster" whether it's petrol, diesel or electric underneath. **Inheritance** — an ambulance is a van with extra kit, not a vehicle redesigned from scratch. **Polymorphism** — any driver can drive any car, because the controls honour the same contract.
 
 **The Spring context for each pillar:**
 
@@ -1424,12 +1446,14 @@ interface Shape {
 }
 
 class Circle implements Shape {
-    double radius;
+    private final double radius;
+    Circle(double radius) { this.radius = radius; }
     public double area() { return Math.PI * radius * radius; }
 }
 
 class Rectangle implements Shape {
-    double w, h;
+    private final double w, h;
+    Rectangle(double w, double h) { this.w = w; this.h = h; }
     public double area() { return w * h; }
 }
 
@@ -1631,7 +1655,7 @@ void resize(Rectangle r) {
     r.setHeight(3);
     assert r.area() == 15; // passes for Rectangle, FAILS for Square (area = 9)
 }
-// The subclass strengthened a precondition the caller never agreed to — LSP violated.
+// Square weakened a postcondition the caller relied on (area == width * height) — LSP violated.
 // Fix: don't inherit. Make Square and Rectangle both implement a Shape interface.
 \`\`\`
 
@@ -1808,10 +1832,15 @@ class Singleton {
 public enum DatabaseConnection {
     INSTANCE;
     
-    private Connection connection;
-    
+    private final Connection connection;
+
     DatabaseConnection() {
-        connection = DriverManager.getConnection(...);
+        try {
+            connection = DriverManager.getConnection(URL, USER, PASSWORD);
+        } catch (SQLException e) {
+            // an enum constructor can't throw checked exceptions either
+            throw new ExceptionInInitializerError(e);
+        }
     }
     
     public Connection getConnection() { return connection; }
