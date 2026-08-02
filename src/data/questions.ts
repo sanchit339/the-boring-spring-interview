@@ -13,7 +13,7 @@ export const categories: Category[] = [
         id: 1,
         text: "What is the difference between `==` and `.equals()` in Java?",
         answer:
-            "`==` compares **references** — it checks whether two variables point to the exact same object in memory. `.equals()` compares **content** — what the object actually represents.\n\nFor primitives like `int` or `char`, `==` compares values directly because primitives live on the stack, not the heap. For objects, you almost always want `.equals()`.",
+            "`==` compares **references** — it checks whether two variables point to the exact same object in memory. `.equals()` compares **content** — what the object actually represents.\n\nFor primitives like `int` or `char`, `==` compares the actual values, because a primitive **holds its value directly** instead of pointing at an object — there's no separate identity to confuse it with. For objects, you almost always want `.equals()`.",
         explanation: `**Analogy:** Think of two people who both own a copy of the same book. They are holding different physical objects (different references), but the content is identical. \`==\` asks "are you holding the exact same physical book?", while \`.equals()\` asks "do your books have the same content?"
 
 \`\`\`java
@@ -98,7 +98,7 @@ public abstract class BaseRepository {
     
     public abstract List<?> findAll(); // must implement
     
-    protected Connection getConnection() { // shared impl
+    protected Connection getConnection() throws SQLException { // shared impl
         return dataSource.getConnection();
     }
 }
@@ -153,7 +153,7 @@ List<User> users = new ArrayList<>(10_000);
         id: 5,
         text: "How does `HashMap` work internally? What happens on collision?",
         answer:
-            "`HashMap` internally uses an **array of buckets** (Entry[]). When you call `put(key, value)`, it calls `key.hashCode()`, applies a bit-mixing function, and takes `hash % capacity` to find the bucket index.\n\nIf two keys land in the same bucket (collision), they form a chain. Before Java 8, that chain was a **linked list** — worst case O(n) per operation. Since Java 8, when a bucket's chain exceeds 8 entries, it **converts to a red-black tree**, reducing worst-case to O(log n).\n\nWhen the map's fill exceeds `capacity × loadFactor` (default 0.75), it **rehashes** — doubles the array and redistributes all entries.",
+            "`HashMap` internally uses an **array of buckets** (Entry[]). When you call `put(key, value)`, it calls `key.hashCode()`, mixes the high bits down with `h ^ (h >>> 16)`, then masks with `(capacity - 1)` to get the bucket index. Capacity is always a **power of two**, which is what makes that mask a fast stand-in for `hash % capacity`.\n\nIf two keys land in the same bucket (collision), they form a chain. Before Java 8, that chain was a **linked list** — worst case O(n) per operation. Since Java 8, when a bucket's chain exceeds 8 entries, it **converts to a red-black tree**, reducing worst-case to O(log n).\n\nWhen the map's fill exceeds `capacity × loadFactor` (default 0.75), it **rehashes** — doubles the array and redistributes all entries.",
         explanation: `**Analogy:** Imagine a building with 16 floors (buckets). When you store something, the receptionist looks at your name tag (hashCode), does some math, and sends you to a floor. If floor 7 already has people (collision), they sit in a row of chairs (linked list) — or if it gets really crowded, they get an organized seating chart (red-black tree). Rehashing is the building expanding to 32 floors and everyone moving to potentially different floors.
 
 **The key thing that breaks HashMap:** If your key's hashCode() always returns the same value — every entry lands in one bucket, turning your map into a linked list. O(n) for every get. This is actually a known denial-of-service vector in web apps where user-controlled input becomes map keys.
@@ -276,7 +276,7 @@ public final class BrokenRange {
 
 // Caller can mutate your "immutable" object:
 List<Integer> list = new ArrayList<>(Arrays.asList(1, 2, 3));
-  BrokenRange range = new BrokenRange(list);
+BrokenRange range = new BrokenRange(list);
 list.add(99); // NOW range.getValues() has 4 elements!
 
 // FIXED — defensive copies in and out
@@ -377,11 +377,8 @@ try {
         }
     }
 }
-\`\`\`
 
-**The right way — try-with-resources:**
-
-\`\`\`java
+// ---- The right way — try-with-resources ----
 try (FileInputStream fis = new FileInputStream("file.txt")) {
     // use fis
 } catch (IOException e) {
@@ -421,12 +418,9 @@ try (
 Map<String, Integer> counts = new HashMap<>();
 int count = counts.get("nonexistent"); // get() returns null, unboxing null → NPE
 // Fix:
-int count = counts.getOrDefault("nonexistent", 0); // safe
-\`\`\`
+int safeCount = counts.getOrDefault("nonexistent", 0); // safe
 
-**The Integer cache surprise:**
-
-\`\`\`java
+// ---- The Integer cache surprise ----
 Integer a = 127;
 Integer b = 127;
 System.out.println(a == b); // true — same cached object
@@ -447,9 +441,9 @@ int sum = nums.stream()
               .reduce(0, Integer::sum); // constant boxing/unboxing
 
 // GOOD — use primitive stream
-int sum = nums.stream()
-              .mapToInt(Integer::intValue) // unbox once
-              .sum(); // no more boxing
+int fastSum = nums.stream()
+                  .mapToInt(Integer::intValue) // unbox once
+                  .sum(); // no more boxing
 \`\`\``,
         followUps: [
           { text: "What is the difference between `int` and `Integer` in terms of memory and nullability?" },
@@ -461,7 +455,7 @@ int sum = nums.stream()
         id: 12,
         text: "What is the difference between `final`, `finally`, and `finalize()`?",
         answer:
-            "These three have nothing to do with each other beyond sharing the word 'final'. **`final`** is a modifier: on a variable = can't reassign, on a method = can't override, on a class = can't extend. **`finally`** is a block in exception handling that always runs after try/catch, regardless of whether an exception was thrown — used for cleanup.\n\n**`finalize()`** was a method on `Object` called by the GC before collecting an object — it was **deprecated in Java 9** and removed in Java 18 because it was unreliable, slow, and caused GC pauses. Use `AutoCloseable` + try-with-resources instead.",
+            "These three have nothing to do with each other beyond sharing the word 'final'. **`final`** is a modifier: on a variable = can't reassign, on a method = can't override, on a class = can't extend. **`finally`** is a block in exception handling that always runs after try/catch, regardless of whether an exception was thrown — used for cleanup.\n\n**`finalize()`** was a method on `Object` called by the GC before collecting an object — it was **deprecated in Java 9** and **deprecated for removal in Java 18** (JEP 421), which also added a `--finalization=disabled` flag to switch it off entirely. It's unreliable, slow, and delays reclamation — an object with a finalizer needs two GC cycles to die. Use `AutoCloseable` + try-with-resources instead.",
         explanation: `**final — three distinct uses:**
 
 \`\`\`java
@@ -648,17 +642,15 @@ List<String> allItems = orders.stream()
     .flatMap(order -> order.getItems().stream())
     .collect(Collectors.toList());
 // ["Apple", "Bread", "Milk", "Cheese", "Eggs"]
-\`\`\`
 
-**flatMap on Optional — the monadic use:**
+// ---- flatMap on Optional — the monadic use ----
+// User.getAddress() returns Optional<Address> — that return type is what nests
+Optional<User> user = userRepository.findById(id);
 
-\`\`\`java
-// Without flatMap — returns Optional<Optional<String>>
-Optional<String> city = user
-    .map(User::getAddress)      // Optional<Address>
-    .map(Address::getCity);     // Optional<Optional<String>> — wrong!
+// map() wraps a value that is ALREADY an Optional
+Optional<Optional<Address>> nested = user.map(User::getAddress); // wrong shape
 
-// With flatMap — stays Optional<String>
+// flatMap() unwraps one layer — stays flat
 Optional<String> city = user
     .flatMap(User::getAddress)  // Optional<Address>
     .map(Address::getCity);     // Optional<String> — correct
@@ -699,11 +691,8 @@ public class Product implements Comparable<Product> {
 
 List<Product> products = new ArrayList<>(...);
 Collections.sort(products); // uses compareTo() — sorts by price
-\`\`\`
 
-**Comparator — external, flexible, chainable:**
-
-\`\`\`java
+// ---- Comparator — external, flexible, chainable ----
 // Sort by name instead
 Comparator<Product> byName = Comparator.comparing(Product::getName);
 
@@ -786,11 +775,8 @@ public class Calculator {
     public int add(int a, int b, int c) { return a + b + c; }
 }
 // The compiler picks the right version based on argument types
-\`\`\`
 
-**Overriding — resolved at runtime (dynamic dispatch):**
-
-\`\`\`java
+// ---- Overriding — resolved at runtime (dynamic dispatch) ----
 class Animal {
     public String sound() { return "..."; }
 }
@@ -852,16 +838,19 @@ public class AppConfig {
     private static int requestCount = 0; // race condition waiting to happen
     public static void incrementCount() { requestCount++; } // not atomic!
 }
-\`\`\`
 
-**Static block — runs once at class load:**
-\`\`\`java
+// ---- Static block — runs once at class load ----
 public class DbDriver {
     static {
         // Runs when class is first loaded
         // Order: static block → instance block → constructor
         System.out.println("Loading DB driver...");
-        Class.forName("com.mysql.cj.jdbc.Driver");
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            // a static block can't throw checked exceptions — wrap or the class won't load
+            throw new ExceptionInInitializerError(e);
+        }
     }
 }
 \`\`\`
@@ -888,7 +877,9 @@ when(service.get(1L)).thenReturn(user);
         text: "What are Java generics and why are they used?",
         answer:
             "Generics let you write **type-safe, reusable code** by parameterizing classes and methods with type placeholders. Instead of `List list` (where you could accidentally mix types), you write `List<String>` — the compiler enforces that only Strings go in and come out.\n\nAt **runtime, generics are erased** (type erasure) — `List<String>` becomes `List` in bytecode. This is why you can't do `new T[]`, `instanceof T`, or `T.class` at runtime — the JVM doesn't know what `T` is anymore.",
-        explanation: `**Why generics exist — the pre-generics pain:**
+        explanation: `**Analogy:** A generic type is the label on a storage crate. \`List<String>\` is a crate stamped "STRINGS ONLY", and the compiler checks every item going in. **Type erasure** is that label being peeled off before the crate ships to the warehouse — at runtime it's just a crate, which is why no one can read the label back.
+
+**Why generics exist — the pre-generics pain:**
 
 \`\`\`java
 // Pre-Java 5 — no type safety
@@ -901,10 +892,9 @@ String name = (String) names.get(1); // ClassCastException at runtime
 List<String> names = new ArrayList<>();
 names.add("Alice");
 names.add(42); // compile error — cannot add int to List<String>
-\`\`\`
 
-**Type erasure — what actually exists at runtime:**
-\`\`\`java
+// ---- Type erasure — what actually exists at runtime ----
+
 // These two have IDENTICAL bytecode after compilation
 List<String> strings = new ArrayList<>();
 List<Integer> ints = new ArrayList<>();
@@ -944,7 +934,9 @@ void addNumbers(List<? super Integer> list) {
         text: "What is the volatile keyword used for?",
         answer:
             "`volatile` guarantees **visibility** — when one thread writes to a volatile variable, the new value is immediately visible to all other threads. Without it, threads may read stale values from their CPU cache.\n\nWhat `volatile` does NOT guarantee: **atomicity**. `count++` is a read-modify-write operation — even if `count` is volatile, two threads doing `count++` simultaneously can both read the same value and both write the same result, losing an increment. Use `AtomicInteger` for thread-safe incrementing, and `synchronized` when you need to protect a multi-step critical section.",
-        explanation: `**The visibility problem volatile solves:**
+        explanation: `**Analogy:** Every CPU core keeps a private scratchpad copy of a shared value. \`volatile\` is the rule "always read the noticeboard, never your scratchpad" — so everyone sees the same value. What it does **not** do is stop two people scribbling on the noticeboard at the same moment, which is why \`count++\` still loses updates.
+
+**The visibility problem volatile solves:**
 
 \`\`\`java
 // Without volatile — this loop may run forever
@@ -965,10 +957,9 @@ class Task implements Runnable {
 
 // With volatile — Thread 1 always reads from main memory
 private volatile boolean running = true; // Fixed
-\`\`\`
 
-**The atomicity trap — volatile is NOT enough for count++:**
-\`\`\`java
+// ---- The atomicity trap — volatile is NOT enough for count++ ----
+
 // BROKEN — volatile doesn't protect this compound operation
 private volatile int count = 0;
 
@@ -1009,7 +1000,7 @@ class Singleton {
         id: 23,
         text: "Explain the basics of multithreading — `Thread` vs `Runnable`.",
         answer:
-            "Prefer `Runnable` over extending `Thread`. Extending `Thread` burns your only inheritance slot and tightly couples the task to the threading mechanism. `Runnable` separates what to do from how it runs — you can pass the same `Runnable` to a thread pool, a timer, or a new `Thread`.\n\n`Callable<T>` is like `Runnable` but can return a value and throw checked exceptions. In modern Java, you almost never directly extend `Thread` — you pass `Runnable` or `Callable` to an `ExecutorService`.",
+            "A `Thread` is the **unit of execution** the OS schedules; a `Runnable` is just the **task** you want run. **Prefer `Runnable`** — extending `Thread` burns your one inheritance slot and welds the task to the threading mechanism, while `Runnable` separates *what to do* from *how it runs*, so the same task can go to a thread pool, a scheduler, or a plain `Thread`.\n\n`Callable<T>` is like `Runnable` but **returns a value and can throw checked exceptions**. In modern Java you almost never extend `Thread` directly — you hand a `Runnable` or `Callable` to an `ExecutorService`.",
         explanation: `**The extends Thread approach — don't do this:**
 
 \`\`\`java
@@ -1021,10 +1012,9 @@ class MyTask extends Thread {
     }
 }
 new MyTask().start();
-\`\`\`
 
-**The Runnable approach — prefer this:**
-\`\`\`java
+// ---- The Runnable approach — prefer this ----
+
 // GOOD — task is decoupled from threading mechanism
 Runnable task = () -> System.out.println("Doing work...");
 
@@ -1067,10 +1057,8 @@ public synchronized void increment() {
 
 // Static method — locks on Counter.class
 public static synchronized Counter getInstance() { ... }
-\`\`\`
 
-**Synchronized block — lock only what matters:**
-\`\`\`java
+// ---- Synchronized block — lock only what matters ----
 public void increment() {
     // Do non-critical work without holding lock
     String message = "incremented to " + (count + 1);
@@ -1084,6 +1072,9 @@ public void increment() {
 \`\`\`
 
 **Race condition — what synchronized prevents:**
+
+**The lock object matters:** Don't synchronize on public objects or literals — someone else could lock on the same object and create unexpected deadlocks. Use a private dedicated lock object:
+
 \`\`\`java
 // Without synchronization — race condition
 // Thread 1: reads count = 5
@@ -1094,13 +1085,13 @@ private int count = 0;
 public void increment() { count++; }
 
 // With synchronization — atomic read-modify-write
-public synchronized void increment() { count++; }
-// Or use AtomicInteger — faster, no lock needed
-private AtomicInteger count = new AtomicInteger(0);
-\`\`\`
+private int safeCount = 0;
+public synchronized void incrementSafely() { safeCount++; }
 
-**The lock object matters:** Don't synchronize on public objects or literals — someone else could lock on the same object and create unexpected deadlocks. Use a private dedicated lock object:
-\`\`\`java
+// Or use AtomicInteger — faster, no lock needed
+private final AtomicInteger atomicCount = new AtomicInteger(0);
+public void incrementAtomically() { atomicCount.incrementAndGet(); }
+
 private final Object lock = new Object();
 synchronized (lock) { ... } // safer than synchronized (this)
 \`\`\``,
@@ -1114,7 +1105,7 @@ synchronized (lock) { ... } // safer than synchronized (this)
         id: 25,
         text: "What are `ExecutorService` and thread pools?",
         answer:
-            "`ExecutorService` is the standard Java API for managing a pool of reusable threads. Instead of creating a new `Thread` for every task (expensive — OS thread creation costs ~1ms and ~1MB stack), you submit tasks to a pool that recycles threads.\n\n`execute(Runnable)` is fire-and-forget — no return value. `submit(Callable)` returns a `Future<T>` that you can use to get the result, check completion, or cancel.\n\nIn Spring Boot, `@Async` methods use an `ExecutorService` under the hood, and you configure it via a `ThreadPoolTaskExecutor` bean.",
+            "`ExecutorService` is the standard Java API for managing a **pool of reusable threads**. Instead of creating a new `Thread` per task (expensive — roughly **1ms to start and ~1MB of stack** each), you submit tasks to a pool that recycles its threads.\n\n**`execute(Runnable)`** is fire-and-forget — no return value. **`submit(Callable)`** returns a **`Future<T>`** you can use to get the result, check completion, or cancel.\n\nIn Spring Boot, `@Async` methods run on an `ExecutorService` under the hood, configured via a **`ThreadPoolTaskExecutor`** bean.",
         explanation: `**The cost of creating threads manually:**
 
 \`\`\`java
@@ -1129,10 +1120,9 @@ for (Request request : requests) {
     pool.submit(() -> process(request));
 }
 pool.shutdown(); // stop accepting new tasks, finish pending ones
-\`\`\`
 
-**execute() vs submit():**
-\`\`\`java
+// ---- execute() vs submit() ----
+
 // execute — fire and forget, no result, unchecked exceptions are unhandled
 pool.execute(() -> sendNotification(userId));
 
@@ -1184,10 +1174,17 @@ public class EmailService {
 Object lockA = new Object();
 Object lockB = new Object();
 
+// sleep() throws InterruptedException, and a Runnable can't declare checked
+// exceptions — so the catch is mandatory, not decoration
+static void pause() {
+    try { Thread.sleep(100); }
+    catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+}
+
 // Thread 1: acquires A, then tries to get B
 Thread t1 = new Thread(() -> {
     synchronized (lockA) {
-        Thread.sleep(100); // simulate work
+        pause(); // simulate work — lets T2 grab lockB first
         synchronized (lockB) { // WAITING — Thread 2 holds B
             System.out.println("T1 done");
         }
@@ -1197,7 +1194,7 @@ Thread t1 = new Thread(() -> {
 // Thread 2: acquires B, then tries to get A
 Thread t2 = new Thread(() -> {
     synchronized (lockB) {
-        Thread.sleep(100);
+        pause();
         synchronized (lockA) { // WAITING — Thread 1 holds A
             System.out.println("T2 done");
         }
@@ -1221,10 +1218,8 @@ Thread t2 = new Thread(() -> {
         synchronized (lockB) { System.out.println("T2 done"); }
     }
 });
-\`\`\`
 
-**Fix 2 — tryLock with timeout (ReentrantLock):**
-\`\`\`java
+// ---- Fix 2 — tryLock with timeout (ReentrantLock) ----
 ReentrantLock lockA = new ReentrantLock();
 ReentrantLock lockB = new ReentrantLock();
 
@@ -1251,7 +1246,9 @@ if (lockA.tryLock(1, TimeUnit.SECONDS)) {
         text: "What is garbage collection in Java, and how does it work at a high level?",
         answer:
             "Java's garbage collector automatically reclaims memory for objects that are no longer reachable from any live thread or static variable. It works on the **generational hypothesis**: most objects die young.\n\nThe heap is split into **Young Generation** (new objects) and **Old Generation** (long-lived objects). Minor GC runs frequently to clean up Eden space (where new objects are born) — it's fast because most objects are already dead. Major/Full GC cleans the Old Generation — it's slower and pauses the application.\n\nModern collectors like G1GC and ZGC reduce pause times by doing most work concurrently with the application.",
-        explanation: `**The generational heap — how objects move:**
+        explanation: `**Analogy:** A restaurant kitchen during service. Most dishes are plated and cleared within minutes — that's **Eden**, swept constantly and cheaply because almost everything on it is already rubbish. The few things that survive all night (stockpots, sauces) get moved to a back shelf — the **old generation** — and are only touched during a deep clean, because re-checking them every five minutes would be wasted work.
+
+**The generational heap — how objects move:**
 
 Young Gen (Eden → Survivor 1 → Survivor 2) → Old Gen → (never collected = memory leak)
 
@@ -1341,7 +1338,7 @@ if (image == null) {
         text: "Explain the four pillars of OOP with examples.",
         answer:
             "**Encapsulation** — bundle state and behavior together, hide internal details. A `BankAccount` class exposes `deposit()` and `withdraw()` but keeps `balance` private. **Abstraction** — expose only what's necessary, hide complexity. A `PaymentService` interface exposes `processPayment()` — callers don't know if it talks to Stripe or PayPal.\n\n**Inheritance** — a subclass inherits and extends a parent's behavior. `SavingsAccount extends BankAccount` adds interest calculation. **Polymorphism** — the same interface behaves differently based on the actual type. A `List<PaymentProcessor>` can hold Stripe, PayPal, and Apple Pay processors, all called the same way.",
-        explanation: `> **Analogy:** A car. **Encapsulation** — the engine is sealed under the hood; you get a pedal, not a fuel-injection dial. **Abstraction** — the pedal means "go faster" whether it's petrol, diesel or electric underneath. **Inheritance** — an ambulance is a van with extra kit, not a vehicle redesigned from scratch. **Polymorphism** — any driver can drive any car, because the controls honour the same contract.
+        explanation: `**Analogy:** A car. **Encapsulation** — the engine is sealed under the hood; you get a pedal, not a fuel-injection dial. **Abstraction** — the pedal means "go faster" whether it's petrol, diesel or electric underneath. **Inheritance** — an ambulance is a van with extra kit, not a vehicle redesigned from scratch. **Polymorphism** — any driver can drive any car, because the controls honour the same contract.
 
 **The Spring context for each pillar:**
 
@@ -1424,12 +1421,14 @@ interface Shape {
 }
 
 class Circle implements Shape {
-    double radius;
+    private final double radius;
+    Circle(double radius) { this.radius = radius; }
     public double area() { return Math.PI * radius * radius; }
 }
 
 class Rectangle implements Shape {
-    double w, h;
+    private final double w, h;
+    Rectangle(double w, double h) { this.w = w; this.h = h; }
     public double area() { return w * h; }
 }
 
@@ -1538,10 +1537,8 @@ public class OrderController {
         return repository.save(new Order(req)); // what if we switch to PostgreSQL?
     }
 }
-\`\`\`
 
-**Loose coupling — with DI:**
-\`\`\`java
+// ---- Loose coupling — with DI ----
 // OrderController depends only on the interface — low coupling
 @RestController
 public class OrderController {
@@ -1631,7 +1628,7 @@ void resize(Rectangle r) {
     r.setHeight(3);
     assert r.area() == 15; // passes for Rectangle, FAILS for Square (area = 9)
 }
-// The subclass strengthened a precondition the caller never agreed to — LSP violated.
+// Square weakened a postcondition the caller relied on (area == width * height) — LSP violated.
 // Fix: don't inherit. Make Square and Rectangle both implement a Shape interface.
 \`\`\`
 
@@ -1779,10 +1776,8 @@ class Singleton {
         return instance;
     }
 }
-\`\`\`
 
-**Double-checked locking — the full solution:**
-\`\`\`java
+// ---- Double-checked locking — the full solution ----
 class Singleton {
     private static volatile Singleton instance; // volatile is REQUIRED here
     
@@ -1808,10 +1803,15 @@ class Singleton {
 public enum DatabaseConnection {
     INSTANCE;
     
-    private Connection connection;
-    
+    private final Connection connection;
+
     DatabaseConnection() {
-        connection = DriverManager.getConnection(...);
+        try {
+            connection = DriverManager.getConnection(URL, USER, PASSWORD);
+        } catch (SQLException e) {
+            // an enum constructor can't throw checked exceptions either
+            throw new ExceptionInInitializerError(e);
+        }
     }
     
     public Connection getConnection() { return connection; }
@@ -1997,26 +1997,21 @@ public class Application {
         text: "What is the difference between `BeanFactory` and `ApplicationContext`?",
         answer: "`BeanFactory` is the basic IoC container interface that provides fundamental bean creation and retrieval using **lazy initialization** (beans are instantiated only when requested with `getBean()`). `ApplicationContext` is a child interface of `BeanFactory` designed for enterprise applications, offering **eager initialization** of singleton beans during startup. `ApplicationContext` adds support for AOP integration, application events, message source i18n, and web-aware scopes. You should always use **`ApplicationContext`** in real apps, reserving `BeanFactory` strictly for memory-constrained environments like Android or embedded IoT devices.",
         explanation: `\`\`\`java
-// BAD for production — BeanFactory loads lazily, so configuration errors pop up at runtime
-BeanFactory factory = new XmlBeanFactory(new ClassPathResource("beans.xml"));
-// App starts fast, but crashes later when a user hits a misconfigured bean!
-PaymentService service = (PaymentService) factory.getBean("paymentService"); // NPE or BeanDefinitionException here
+// BAD for production — a bare BeanFactory builds beans lazily, so config errors surface late
+// (XmlBeanFactory is gone — deprecated in Spring 3.1, removed in Spring 5)
+DefaultListableBeanFactory factory = new DefaultListableBeanFactory();
+factory.registerBeanDefinition("paymentService", new RootBeanDefinition(PaymentService.class));
+// Nothing is validated yet — the app "starts" instantly because nothing was built
+PaymentService service = factory.getBean(PaymentService.class); // BeanCreationException fires HERE, mid-request
 \`\`\`
 
 \`\`\`java
-// GOOD — ApplicationContext loads eagerly, validating all singleton beans at startup
+// GOOD — ApplicationContext instantiates every non-lazy singleton at startup
 ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.class);
-// Fail-Fast: If a required bean is missing or misconfigured, context fails during startup, NOT during a user request
+// Fail-fast: a missing bean or a bad @Value blows up the deployment, NOT the first user request
 \`\`\`
 
-**Feature matrix comparison:**
-
-| Feature | \`BeanFactory\` | \`ApplicationContext\` |
-| :--- | :--- | :--- |
-| **Bean Initialization** | Lazy (on \`getBean()\`) | Eager (at startup for singletons) |
-| **Enterprise Services (AOP, Events)** | No | Built-in |
-| **Memory Footprint** | Lightweight | Slightly higher |
-| **Usage Scenario** | Mobile / Embedded IoT | Standard Web & Microservices |
+**How they actually differ:** \`BeanFactory\` instantiates lazily on \`getBean()\`; \`ApplicationContext\` instantiates non-lazy singletons eagerly during startup. \`BeanFactory\` gives you nothing but bean creation and lookup, while \`ApplicationContext\` layers on AOP auto-proxying, \`ApplicationEvent\` publishing, \`MessageSource\` i18n, resource loading, and web-aware scopes. You pay for that with a slightly larger footprint and a slower start — the only trade that ever favours \`BeanFactory\` is a genuinely memory-constrained embedded device.
 
 **Real-world trap:** If you rely on \`BeanFactory\` or set \`@Lazy\` on your singletons indiscriminately, missing configuration properties or broken bean wiring will only fail when the first production request hits that specific line of code. \`ApplicationContext\` gives you fail-fast protection on deployment.`,
         followUps: [
@@ -2126,33 +2121,38 @@ public class CacheLoader {
         text: "What are `@Component`, `@Service`, `@Repository`, and `@Controller` — how do they differ?",
         answer: "`@Component` is the generic stereotype annotation indicating that a Java class is a Spring-managed bean. `@Service`, `@Repository`, and `@Controller` are **specialized meta-annotations** that inherit from `@Component` but convey clear architectural roles across your application layers. `@Controller` marks web request handlers, `@Service` holds business logic, and `@Repository` marks data persistence components while enabling automatic **persistence exception translation** into Spring's `DataAccessException` hierarchy. You should use the specific stereotype for each layer to improve code semantics and leverage layer-specific Spring features.",
         explanation: `\`\`\`java
-// BAD — using generic @Component for database access hides persistence errors
+// BAD — plain @Component on a DAO: vendor exceptions leak straight through to callers
 @Component
 public class SqlUserRepository {
-    public User findById(Long id) {
-        // If SQLException is thrown here, Spring won't translate it into a Spring DataAccessException
-        throw new SQLException("Connection timeout");
-    }
-}
-\`\`\`
+    @PersistenceContext
+    private EntityManager entityManager;
 
-\`\`\`java
-// GOOD — @Repository translates vendor-specific SQL exceptions automatically
-@Repository
-public class SqlUserRepository {
     public User findById(Long id) {
-        // Spring automatically translates vendor exceptions (e.g., SQLException, HibernateException)
-        // into uniform Spring DataAccessException types like DataAccessResourceFailureException
+        // A dead connection escapes as a raw Hibernate PersistenceException.
+        // Now OrderService has to import Hibernate just to catch it — the persistence
+        // technology has leaked into your business layer.
         return entityManager.find(User.class, id);
     }
 }
 \`\`\`
 
-**Real-world architecture breakdown:**
-- \`@Controller\` / \`@RestController\` — Web Presentation layer (handles HTTP requests and response serialization)
-- \`@Service\` — Business Logic layer (handles transactions, domain validations, orchestration)
-- \`@Repository\` — Persistence layer (handles SQL/NoSQL DB interaction and exception translation)
-- \`@Component\` — Cross-cutting utilities (file parsers, external API client helpers, validators)`,
+\`\`\`java
+// GOOD — @Repository triggers PersistenceExceptionTranslationPostProcessor
+@Repository
+public class SqlUserRepository {
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    public User findById(Long id) {
+        // Same call, but the bean is proxied: HibernateException / SQLException get rethrown
+        // as Spring's DataAccessException hierarchy (e.g. DataIntegrityViolationException).
+        // Service code catches one exception family no matter which DB sits underneath.
+        return entityManager.find(User.class, id);
+    }
+}
+\`\`\`
+
+**Which stereotype goes where:** \`@Controller\` and \`@RestController\` belong on the web layer, handling HTTP requests and response serialization. \`@Service\` marks the business layer that owns transactions, domain validation, and orchestration. \`@Repository\` marks the persistence layer and buys you the exception translation above. Plain \`@Component\` is the fallback for things that don't sit in any of those tiers — file parsers, external API client wrappers, validators.`,
         followUps: [
           { text: "Are they functionally the same for component scanning?" },
           { text: "What extra behavior does `@Repository` enable (exception translation)?" },
@@ -2214,6 +2214,8 @@ public interface PaymentGateway { void process(); }
 
 @Service
 public class CheckoutService {
+    private final PaymentGateway paymentGateway;
+
     // CRASH: NoUniqueBeanDefinitionException: expected single matching bean but found 2: stripeGateway, paypalGateway
     public CheckoutService(PaymentGateway paymentGateway) {
         this.paymentGateway = paymentGateway;
@@ -2333,19 +2335,17 @@ public class AppConfig {
         id: 48,
         text: "What is component scanning, and how does `@ComponentScan` work?",
         answer: "**Component scanning** is the process where Spring searches your application's classpath for classes annotated with `@Component`, `@Service`, `@Repository`, or `@Controller` and registers them as beans. `@ComponentScan` specifies the base packages to scan; if no package is declared, it defaults to the package of the class containing the `@ComponentScan` annotation. `@SpringBootApplication` automatically includes `@ComponentScan` targeting its own package and all sub-packages. If a bean class lives in a package hierarchy outside the main boot application package, Spring will silently ignore it unless explicitly added to `basePackages`.",
-        explanation: `**Project Package Layout TRAP:**
-\`\`\`
-com.company.app          <-- @SpringBootApplication main class lives here
-  ├── controller
-  └── service
-
-com.company.external     <-- OUTSIDE MAIN PACKAGE!
-  └── LegacyHelper.java  <-- Annotated @Component, but Spring CANNOT find it by default!
-\`\`\`
+        explanation: `The trap is a package layout where a bean sits outside the main class's package tree:
 
 \`\`\`java
-// BAD — Spring boot main class won't pick up com.company.external
-@SpringBootApplication // Scans com.company.app.* ONLY
+// com.company.app          <-- @SpringBootApplication main class lives here
+//   ├── controller
+//   └── service
+// com.company.external     <-- OUTSIDE the main package!
+//   └── LegacyHelper.java  <-- annotated @Component, but Spring never finds it
+
+// BAD — scans com.company.app.* ONLY; LegacyHelper is silently skipped, no warning
+@SpringBootApplication
 public class Application {
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args);
@@ -2417,6 +2417,10 @@ In production Kubernetes or Docker deployments, never hardcode active profiles i
 // BAD — Business logic cluttered with repetitive cross-cutting concerns
 @Service
 public class AccountService {
+    private final AccountRepository accountRepo;
+
+    public AccountService(AccountRepository accountRepo) { this.accountRepo = accountRepo; }
+
     public void transferMoney(Long from, Long to, double amount) {
         long start = System.currentTimeMillis(); // Logging concern
         System.out.println("Checking permissions..."); // Security concern
@@ -2439,6 +2443,9 @@ public class AccountService {
 // GOOD — Core logic remains clean; cross-cutting concerns handled by Spring AOP
 @Service
 public class AccountService {
+    private final AccountRepository accountRepo;
+
+    public AccountService(AccountRepository accountRepo) { this.accountRepo = accountRepo; }
 
     @Transactional // AOP handles transaction start/commit/rollback
     @LogExecutionTime // Custom AOP aspect handles timing and logging
@@ -2447,7 +2454,9 @@ public class AccountService {
         accountRepo.credit(to, amount);
     }
 }
-\`\`\``,
+\`\`\`
+
+**Where you actually meet this:** you use Spring AOP every day without writing an aspect — \`@Transactional\`, \`@Cacheable\`, \`@Async\`, and \`@PreAuthorize\` are all proxy-based advice. That also explains the classic bug: because the advice lives on a **proxy**, a \`@Transactional\` method called via \`this\` from inside the same bean bypasses the proxy entirely and never opens a transaction. Custom aspects are worth writing for genuinely global concerns like request timing or audit logging; anything narrower is usually clearer as a plain method call.`,
         followUps: [
           { text: "What are cross-cutting concerns? Give 3 examples in a real app." },
           { text: "Does Spring AOP use proxies or bytecode weaving by default?" },
@@ -2457,7 +2466,7 @@ public class AccountService {
       {
         id: 51,
         text: "Explain `@Before`, `@After`, `@Around`, and other AOP advice types.",
-        answer: "AOP **advice** defines what action an aspect takes and when that action executes during method execution. **`@Before`** runs before the target method executes; **`@AfterReturning`** runs after successful method execution; **`@AfterThrowing`** runs if the method throws an exception; **`@After` (finally)** runs after completion regardless of outcome. **`@Around`** is the most powerful advice type because it surrounds method invocation completely, allowing you to modify arguments, inspect or modify return values, handle exceptions, or prevent method execution entirely using `ProceedingJoinPoint.proceed()`. ",
+        answer: "AOP **advice** defines what action an aspect takes and when that action executes during method execution. **`@Before`** runs before the target method executes; **`@AfterReturning`** runs after successful method execution; **`@AfterThrowing`** runs if the method throws an exception; **`@After` (finally)** runs after completion regardless of outcome. **`@Around`** is the most powerful advice type because it surrounds method invocation completely, allowing you to modify arguments, inspect or modify return values, handle exceptions, or prevent method execution entirely using `ProceedingJoinPoint.proceed()`.",
         explanation: `\`\`\`java
 // Custom AOP Aspect demonstrating @Around advice for performance logging
 @Aspect
@@ -2516,27 +2525,26 @@ public class PaymentService {
 \`\`\`
 
 \`\`\`java
-// WORKAROUND — Using @Lazy injects a dynamic proxy instead of waiting for bean creation
+// FIXED — Extract the shared responsibility so neither service references the other
+@Service
+public class PaymentConfirmationService { // Owns "tell the customer the payment landed"
+    public void confirm(Long orderId) { /* send email, write audit row */ }
+}
+
 @Service
 public class PaymentService {
-    private final OrderService orderService;
+    // Was OrderService — that reference is what closed the loop
+    private final PaymentConfirmationService confirmations;
 
-    public PaymentService(@Lazy OrderService orderService) {
-        // Spring injects a proxy; real OrderService is instantiated only when first invoked
-        this.orderService = orderService;
+    public PaymentService(PaymentConfirmationService confirmations) {
+        this.confirmations = confirmations;
     }
 }
+// Graph is now a DAG: OrderService -> PaymentService -> PaymentConfirmationService
+// Startup succeeds, and each class has one reason to change
 \`\`\`
 
-\`\`\`java
-// BEST FIX — Refactor! Extract shared logic into a separate AuditNotificationService
-@Service
-public class OrderService {
-    private final PaymentService paymentService;
-    private final AuditNotificationService auditService;
-    // No circle! OrderService -> PaymentService & AuditNotificationService
-}
-\`\`\`
+**The escape hatches, and why they aren't fixes:** \`@Lazy\` on one injection point — \`public PaymentService(@Lazy OrderService orderService)\` — makes Spring inject a proxy that satisfies the constructor immediately and resolves the real bean on first method call. Setter injection works too, since both beans are fully constructed before anything gets wired. Both get the app booting, but the cycle is still in your design: it's no longer visible in the code structure, so the next developer can't see it, and every call through the lazy proxy pays an indirection cost.
 
 **Spring Boot 2.6+ change:** Starting with Spring Boot 2.6, circular dependencies are **forbidden by default** across all injection styles. If legacy code has circular references, you have to explicitly set \`spring.main.allow-circular-references=true\` in \`application.properties\`, but refactoring is the right solution.`,
         followUps: [
@@ -2583,9 +2591,9 @@ public class Application {
 
 **Real-world impact:** In microservice architectures, Spring Boot allows teams to bootstrap new microservices in minutes. Dependency management is simplified because \`spring-boot-starter-parent\` guarantees compatible library versions across your entire tech stack.`,
         followUps: [
-          { text: "What problems does Boot solve that raw Spring still requires boilerplate for?" },
+          { text: "What boilerplate does raw Spring make you write that Boot removes?" },
           { text: "Can you use Spring without Boot? When might you?" },
-          { text: "What is opinionated configuration?" },
+          { text: "What does \"opinionated\" mean here, and how do you override an opinion?" },
         ],
       },
       {
@@ -2618,7 +2626,7 @@ public class Application {
 
 **Production advice:** When building enterprise microservices across multiple teams, create a **custom company starter** (e.g., \`company-boot-starter-logging\`) containing standardized security filters, logging formats, and tracing configurations. This ensures every team adheres to enterprise architecture standards automatically.`,
         followUps: [
-          { text: "Name starters you've used (`web`, `data-jpa`, `security`, `actuator`, etc.)." },
+          { text: "Which starters have you actually used, and what does each pull in?" },
           { text: "What is `spring-boot-starter-parent`, and what does it manage?" },
           { text: "How would you create a custom starter for shared company config?" },
         ],
@@ -2658,8 +2666,8 @@ public class CustomDatabaseConfig {
 **Debugging Tip:** Run your application with the \`--debug\` flag or set \`logging.level.org.springframework.boot.autoconfigure=DEBUG\`. Spring Boot prints a detailed **Conditions Evaluation Report** showing exactly which auto-configurations matched and which ones were negative matches and why.`,
         followUps: [
           { text: "What role do `@ConditionalOnClass`, `@ConditionalOnMissingBean`, etc. play?" },
-          { text: "Where are auto-configuration classes registered (`AutoConfiguration.imports`)?" },
-          { text: "How do you debug which auto-configs were applied (`--debug`, conditions report)?" },
+          { text: "Where does Boot get the list of auto-configuration classes to evaluate?" },
+          { text: "How do you find out which auto-configs applied and which backed off?" },
         ],
       },
       {
@@ -2667,9 +2675,9 @@ public class CustomDatabaseConfig {
         text: "What is `@SpringBootApplication` — what annotations does it combine?",
         answer: "`@SpringBootApplication` is a meta-annotation that combines **`@SpringBootConfiguration`**, **`@EnableAutoConfiguration`**, and **`@ComponentScan`** into a single convenience annotation. `@SpringBootConfiguration` marks the class as a configuration source, `@EnableAutoConfiguration` triggers Spring Boot's automatic configuration mechanism based on classpath dependencies, and `@ComponentScan` activates component scanning starting from the current package. It is placed on the main entry-point class of your application. If you place `@SpringBootApplication` in the wrong package root, Spring Boot won't scan your service components, causing missing bean runtime errors.",
         explanation: `\`\`\`java
-// Equivalent to placing all 3 annotations manually:
+// Close to placing all 3 annotations manually (see the caveat below):
 @SpringBootConfiguration      // Inherits from @Configuration; enables bean definitions
-@EnableAutoConfiguration     // Auto-configures Tomcat, JPA, Jackson, etc.
+@EnableAutoConfiguration      // Auto-configures Tomcat, JPA, Jackson, etc.
 @ComponentScan                // Scans current package and sub-packages for @Component
 public class Application {
     public static void main(String[] args) {
@@ -2689,9 +2697,11 @@ public class NoDbApplication {
 }
 \`\`\`
 
+**The caveat on hand-rolling it:** \`@SpringBootApplication\` also carries \`TypeExcludeFilter\` and \`AutoConfigurationExcludeFilter\` on its \`@ComponentScan\`, so writing the three annotations by hand quietly changes how test slices (\`@WebMvcTest\`, \`@DataJpaTest\`) filter beans. Keep the single annotation and use its \`exclude\`, \`scanBasePackages\`, and \`nameGenerator\` attributes instead.
+
 **Package location rule:** Always place your \`@SpringBootApplication\` annotated class in the **root base package** (e.g., \`com.company.order\`). If you put it inside \`com.company.order.config\`, Spring Boot won't scan sibling packages like \`com.company.order.service\`, causing \`NoSuchBeanDefinitionException\`.`,
         followUps: [
-          { text: "Break down `@SpringBootConfiguration`, `@EnableAutoConfiguration`, and `@ComponentScan`." },
+          { text: "What breaks if the main class sits in a sub-package instead of the root?" },
           { text: "Can you replace `@SpringBootApplication` with its composed annotations?" },
           { text: "How do you exclude a specific auto-configuration?" },
         ],
@@ -2724,17 +2734,13 @@ public class StripePaymentGateway {
 }
 \`\`\`
 
-**Precedence Order (Highest to Lowest):**
-1. Command line arguments (\`--server.port=9090\`)
-2. Environment variables (\`SERVER_PORT=9090\`)
-3. Profile-specific files (\`application-prod.yml\`)
-4. Application files (\`application.yml\`)
+**Precedence, highest wins:** **command-line arguments** (\`--server.port=9090\`) beat everything, then \`SPRING_APPLICATION_JSON\`, then **Java system properties** (\`-Dserver.port=9090\`), then **OS environment variables** (\`SERVER_PORT=9090\`), then **profile-specific files** (\`application-prod.yml\`), then plain \`application.yml\`. At the same level, a file sitting **outside** the jar beats the one packaged inside it. Note the order of the middle two — \`-D\` system properties outrank environment variables, which trips people up because env vars feel more "external".
 
 **Production Trap:** Never commit passwords, API keys, or database credentials into \`application.yml\` in source control. Store secrets in environment variables or cloud key vaults (AWS Secrets Manager, HashiCorp Vault).`,
         followUps: [
-          { text: "What is the property source precedence order (CLI, env, files, defaults)?" },
+          { text: "What is the property source precedence order?" },
           { text: "When would you prefer YAML over properties?" },
-          { text: "How do you inject a property with `@Value` vs `@ConfigurationProperties`?" },
+          { text: "How do you supply a default for a property that might be missing?" },
         ],
       },
       {
@@ -2779,8 +2785,8 @@ public class MailProperties {
 
 **Why it beats \`@Value\`:** If you have 15 configuration properties for an AWS S3 client, injecting 15 individual \`@Value\` fields litters your class with boilerplate. \`@ConfigurationProperties\` groups them into a single re-usable, testable properties object.`,
         followUps: [
-          { text: "How do you enable it (`@EnableConfigurationProperties` / `@ConfigurationPropertiesScan`)?" },
-          { text: "How does it support type-safe nested configuration and validation (`@Validated`)?" },
+          { text: "How do you register a `@ConfigurationProperties` class as a bean?" },
+          { text: "How do nested objects, lists, and startup validation work with it?" },
           { text: "Why is it preferred over many `@Value` injections for groups of related properties?" },
         ],
       },
@@ -2814,14 +2820,18 @@ spring:
 \`\`\`
 
 \`\`\`bash
-# Activating production profile when launching the executable JAR
-java -jar -Dspring.profiles.active=prod order-service.jar
+# Activating production profile when launching the executable JAR.
+# JVM args go BEFORE -jar: anything after -jar is read as the jar name, then as app args.
+java -Dspring.profiles.active=prod -jar order-service.jar
+
+# Or as a Spring command-line argument (highest precedence of all):
+java -jar order-service.jar --spring.profiles.active=prod
 \`\`\`
 
 **Production best practice:** Keep \`application-prod.yml\` clean of plaintext secrets. Use placeholder references like \`password: \${DB_PASSWORD}\` and let Kubernetes or Docker inject \`DB_PASSWORD\` as an environment variable at container startup.`,
         followUps: [
           { text: "How do profile-specific files and `spring.profiles.active` work together?" },
-          { text: "How would you keep secrets out of Git for prod (env vars, vault, etc.)?" },
+          { text: "How do you keep prod secrets out of Git?" },
           { text: "What is the difference between multi-document YAML and separate profile files?" },
         ],
       },
@@ -2849,9 +2859,9 @@ logging.level.web=DEBUG
 
 **Important gotcha:** DevTools triggers automatic restarts only when classpath files change. If using IntelliJ IDEA, you must press \`Ctrl+F9\` (or \`Cmd+F9\` on Mac) to compile your modified Java files, or enable "Build project automatically" in settings.`,
         followUps: [
-          { text: "What features does DevTools provide (auto-restart, LiveReload, property defaults)?" },
+          { text: "Which property defaults does DevTools change in development?" },
           { text: "Is DevTools included in production builds by default?" },
-          { text: "What is the difference between restart and reload classloaders?" },
+          { text: "What is the difference between the base and restart classloaders?" },
         ],
       },
       {
@@ -2934,7 +2944,7 @@ public class PaymentGatewayHealthIndicator implements HealthIndicator {
 
 **Kubernetes Integration:** In cloud environments, Kubernetes uses \`/actuator/health/liveness\` to check if the pod container should be restarted, and \`/actuator/health/readiness\` to check if the pod can accept incoming web traffic.`,
         followUps: [
-          { text: "What interface or base class do you implement (`HealthIndicator`)?" },
+          { text: "How do you stop a slow dependency check from hanging `/health`?" },
           { text: "When would you mark a custom check as DOWN vs OUT_OF_SERVICE?" },
           { text: "How does readiness vs liveness differ in Kubernetes health probes?" },
         ],
@@ -2966,7 +2976,7 @@ public class PaymentGatewayHealthIndicator implements HealthIndicator {
 
 **When to switch servers:** Undertow offers a lower memory footprint and higher concurrency handling for heavy I/O workloads compared to Tomcat. Netty is used exclusively when building non-blocking, reactive applications using Spring WebFlux.`,
         followUps: [
-          { text: "What is the default embedded server for `spring-boot-starter-web`?" },
+          { text: "What happens if two embedded server starters land on the classpath?" },
           { text: "How do you switch from Tomcat to Jetty or Undertow?" },
           { text: "When would you deploy as WAR to an external server instead?" },
         ],
@@ -3035,7 +3045,7 @@ public class OrderService {
 
 **Performance Trap:** Avoid string concatenation inside log statements (\`log.debug("Processing order " + id)\`). String concatenation evaluates immediately regardless of whether DEBUG level is enabled! Always use parameterized anchors (\`log.debug("Processing order {}", id)\`).`,
         followUps: [
-          { text: "What is the default logging framework, and how does Logback fit in?" },
+          { text: "How do SLF4J and Logback relate to each other?" },
           { text: "How do you set package-level log levels in `application.yml`?" },
           { text: "How do you use a custom `logback-spring.xml` with profiles?" },
         ],
@@ -3078,7 +3088,7 @@ public class CacheWarmupRunner implements ApplicationRunner {
         followUps: [
           { text: "When do these runners execute in the application lifecycle?" },
           { text: "How do you control order when multiple runners exist?" },
-          { text: "When would you use them for startup data seeding?" },
+          { text: "What are the risks of doing heavy work inside a runner?" },
         ],
       },
       {
@@ -3104,14 +3114,15 @@ public class ServletInitializerApplication extends SpringBootServletInitializer 
 
 \`\`\`bash
 # Executing an executable Fat JAR in Docker / Production
-java -jar -Dserver.port=8080 target/order-service-1.0.0.jar
+# JVM args (-D, -Xmx) come BEFORE -jar; Spring args (--key=value) come AFTER the jar name
+java -Xmx512m -jar target/order-service-1.0.0.jar --server.port=8080
 \`\`\`
 
 **How executable JARs work internally:**
 Spring Boot uses a custom \`JarLauncher\` that allows nesting JAR dependencies inside \`BOOT-INF/lib/\` within a single ZIP structure without needing to explode dependencies onto host file systems.`,
         followUps: [
           { text: "What is an executable fat/uber JAR?" },
-          { text: "What changes are needed to package as WAR (`SpringBootServletInitializer`)?" },
+          { text: "What changes are needed to package as a deployable WAR?" },
           { text: "How do you run a Boot JAR with external config?" },
         ],
       },
@@ -3147,8 +3158,8 @@ public class UserRestController {
 
 **Common mistake:** If you annotate a REST controller with \`@Controller\` instead of \`@RestController\` and forget \`@ResponseBody\` on methods, Spring will interpret the returned string as a view template name, throwing a \`404 Not Found\` or \`Circular view path\` exception!`,
         followUps: [
-          { text: "Does `@RestController` include `@ResponseBody` on every method?" },
-          { text: "When would you still use `@Controller` (e.g., MVC views / Thymeleaf)?" },
+          { text: "What happens if a `@Controller` method returns a `String` without `@ResponseBody`?" },
+          { text: "When would you still reach for plain `@Controller`?" },
           { text: "Can you mix both in the same application?" },
         ],
       },
@@ -3201,11 +3212,16 @@ public List<User> getUsers() { ... }   // a DELETE to /users also lands here —
 @RestController
 @RequestMapping("/api/users")   // class-level base path, no method = fine here
 public class UserController {
-    @GetMapping("/{id}")    // GET only
-    @PostMapping            // POST only
-    @PutMapping("/{id}")    // PUT only
-    @DeleteMapping("/{id}") // DELETE only
+    @GetMapping("/{id}")                       // GET /api/users/42 only
+    public User get(@PathVariable Long id) { ... }
+
+    @PostMapping                               // POST /api/users only
+    public User create(@RequestBody UserDto dto) { ... }
+
+    @DeleteMapping("/{id}")                    // DELETE /api/users/42 only
+    public void delete(@PathVariable Long id) { ... }
 }
+// One verb per method — these annotations are NOT stackable on a single method
 \`\`\`
 
 \`@GetMapping\` is literally \`@RequestMapping(method = GET)\` under the hood — it's pure sugar, but the sugar is what stops you from exposing unintended verbs. In a code review, a bare \`@RequestMapping("/x")\` on a method is an automatic flag.`,
@@ -3280,7 +3296,7 @@ Both conversions run through an **\`HttpMessageConverter\`** — \`MappingJackso
         explanation: `\`\`\`java
 // WRONG — no validation, garbage data hits your service/DB
 public Order create(@RequestBody CreateOrderRequest req) {
-    orderService.save(req); // req.email could be null or ""
+    return orderService.save(req); // req.email could be null or ""
 }
 \`\`\`
 
@@ -3316,14 +3332,16 @@ public class OrderController {
         explanation: `\`\`\`java
 // WITHOUT global handling — every controller repeats try/catch, inconsistent errors
 @PostMapping("/users")
-public User create(@RequestBody User u) {
+public ResponseEntity<?> create(@RequestBody User u) {   // note the wildcard return type
     try {
-        return service.create(u);
+        return ResponseEntity.ok(service.create(u));
     } catch (DuplicateEmailException e) {
-        // hand-built response, copy-pasted everywhere
+        // hand-built response, copy-pasted into every controller
         return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
     }
 }
+// The ResponseEntity<?> is itself a smell — the method's type no longer
+// documents what it returns, because it returns two different shapes.
 \`\`\`
 
 \`\`\`java
@@ -3680,10 +3698,7 @@ JDBC / DB Driver  ← actual DB connection
 Database
 \`\`\`
 
-A real example: you call \`userRepository.findByEmail(email)\`.
-- Spring Data JPA parses the method name and builds a JPQL query
-- JPA's \`EntityManager.createQuery()\` is invoked with that JPQL
-- Hibernate translates it to \`SELECT * FROM users WHERE email = ?\` and fires it via JDBC
+A real example: you call \`userRepository.findByEmail(email)\`. **Spring Data JPA** parses the method name and builds a JPQL query. That JPQL goes into **JPA's** \`EntityManager.createQuery()\`. **Hibernate** then translates it to \`SELECT ... FROM users WHERE email = ?\` and fires it through JDBC.
 
 **The vendor lock-in question comes up in interviews:** If you stick to standard JPA annotations (\`@Entity\`, \`@OneToMany\`) and avoid Hibernate-specific extensions (\`@BatchSize\`, \`@Cache\`), you could theoretically swap Hibernate for EclipseLink. Nobody does this in practice, but understanding the layer separation matters when you read docs and trace bugs.`,
         followUps: [
@@ -3696,16 +3711,24 @@ A real example: you call \`userRepository.findByEmail(email)\`.
         id: 86,
         text: "What is the difference between `JpaRepository`, `CrudRepository`, and `PagingAndSortingRepository`?",
         answer:
-          "`CrudRepository` provides the 7 core CRUD methods. `PagingAndSortingRepository` extends it with `findAll(Pageable)` and `findAll(Sort)`. `JpaRepository` extends both and adds JPA-specific methods: `flush`, `saveAndFlush`, batch deletes, and — crucially — returns `List<T>` instead of `Iterable<T>`. Always extend `JpaRepository` in production; you'll eventually need pagination or flush control and retrofitting costs refactors.",
+          "`CrudRepository` provides the 7 core CRUD methods. `PagingAndSortingRepository` adds `findAll(Pageable)` and `findAll(Sort)` — note that since **Spring Data 3.0 it no longer extends `CrudRepository`**; the two are independent. `JpaRepository` extends both branches and adds JPA-specific methods: `flush`, `saveAndFlush`, batch deletes, and — crucially — returns `List<T>` instead of `Iterable<T>`. Always extend `JpaRepository` in production; you'll eventually need pagination or flush control and retrofitting costs refactors.",
         explanation: `The hierarchy:
 
 \`\`\`
-CrudRepository          → save, findById, findAll (Iterable), delete, count
+Spring Data 3.x (Boot 3) — these two are now SEPARATE branches:
+
+CrudRepository              → save, findById, findAll (Iterable), delete, count
+PagingAndSortingRepository  → findAll(Pageable), findAll(Sort)
+                              (no longer extends CrudRepository as it did in 2.x)
+
+ListCrudRepository / ListPagingAndSortingRepository
+                            → same, but List<T> instead of Iterable<T>
     ↑
-PagingAndSortingRepository → + findAll(Pageable), findAll(Sort)
-    ↑
-JpaRepository           → + saveAll, flush, saveAndFlush, deleteInBatch,
-                            deleteAllInBatch, getById — and findAll returns List<T>
+JpaRepository               → extends BOTH List* variants, and adds
+                              saveAll, flush, saveAndFlush, deleteAllInBatch,
+                              getReferenceById
+                              (getById and deleteInBatch are deprecated —
+                               don't reach for them in a Boot 3 codebase)
 \`\`\`
 
 The \`Iterable<T>\` vs \`List<T>\` difference is the most annoying in practice:
@@ -3818,29 +3841,26 @@ for (Order o : orders) {
 // 50 orders = 51 queries total. N+1.
 \`\`\`
 
-Fix 1: \`JOIN FETCH\` in JPQL — one query:
+Three fixes, cheapest last:
 
 \`\`\`java
+// FIX 1 — JOIN FETCH in JPQL: one query, full control over what's loaded
 @Query("SELECT DISTINCT o FROM Order o JOIN FETCH o.items")
 List<Order> findAllWithItems();
 // Single query: SELECT o.*, i.* FROM orders o JOIN items i ON i.order_id = o.id
-\`\`\`
 
-Fix 2: \`@EntityGraph\` for cleaner repository signatures:
-
-\`\`\`java
+// FIX 2 — @EntityGraph: same JOIN FETCH, cleaner repository signature
 @EntityGraph(attributePaths = {"items"})
-List<Order> findAll(); // Spring generates the JOIN FETCH for you
-\`\`\`
+List<Order> findAll(); // Spring generates the fetch join for you
 
-Fix 3: \`@BatchSize\` — cheapest, no query changes needed:
-
-\`\`\`java
+// FIX 3 — @BatchSize on the association: no query changes at all
 @OneToMany
 @BatchSize(size = 25) // 50 orders = 2 IN-clause queries instead of 50
 private List<Item> items;
 // Or globally: hibernate.default_batch_fetch_size=25
 \`\`\`
+
+For a **read-only endpoint** none of these are ideal — if you only need an order id and a total, a DTO projection (\`SELECT new com.app.OrderSummary(o.id, o.total) FROM Order o\`) skips entity hydration entirely and never touches the association.
 
 **Detection:** enable \`spring.jpa.show-sql=true\` and count the \`SELECT\` statements in logs. In tests, use Hypersistence Optimizer or assert query count with p6spy. Never discover N+1 in production — it's a perf cliff, not a gradual degradation.`,
         followUps: [
@@ -3903,12 +3923,13 @@ Optional<Order> findWithUser(@Param("id") Long id);
 public class Order {
     @Id Long id;
 
-    // owning side — no mappedBy, holds the FK in the DB
+    // owning side — no mappedBy, holds the user_id FK in the orders table
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
 
-    // owning side of the one-to-many from Order's perspective
+    // INVERSE side — mappedBy = "order" means "Item.order owns this relationship".
+    // Hibernate reads Item.order to write the FK; it never writes anything from this list.
     @OneToMany(mappedBy = "order", cascade = CascadeType.PERSIST)
     private List<Item> items = new ArrayList<>();
 }
@@ -4187,27 +4208,27 @@ Phantom Read     | Range query returns different rows later    | SERIALIZABLE
 Practical example of non-repeatable read (the silent bug):
 
 \`\`\`java
+// @Query("SELECT a.balance FROM Account a WHERE a.id = :id")
+// BigDecimal findBalanceById(@Param("id") Long id);
+
 @Transactional(isolation = Isolation.READ_COMMITTED) // default
-public void checkAndCharge() {
-    Account acc = accountRepo.findById(id);
-    // READ 1: balance = 1000
-
-    // ... some business logic ...
-
-    Account acc2 = accountRepo.findById(id); // same query, same txn
-    // READ 2: balance = 500 — another transaction updated it!
-    // acc.getBalance() != acc2.getBalance() at READ_COMMITTED
+public void checkAndCharge(Long id) {
+    BigDecimal first = accountRepo.findBalanceById(id);  // READ 1: 1000
+    // ... business logic; meanwhile another txn commits a withdrawal ...
+    BigDecimal second = accountRepo.findBalanceById(id); // READ 2: 500 — changed!
+    // At READ_COMMITTED every statement sees the latest COMMITTED data,
+    // so first != second inside ONE transaction. Non-repeatable read.
 }
 
 // Fix: REPEATABLE_READ — both reads see the same MVCC snapshot.
 // Nothing is locked; the writer still commits. You just don't SEE the change.
 @Transactional(isolation = Isolation.REPEATABLE_READ)
-public void checkAndCharge() { ... } // READ 1 == READ 2, guaranteed
-
-// Careful: a consistent READ is not a safe WRITE. If you read the balance
-// and then decrement it, you need @Version (optimistic) or SELECT ... FOR
-// UPDATE (pessimistic). Isolation alone won't stop lost updates.
+public void checkAndCharge(Long id) { ... } // READ 1 == READ 2, guaranteed
 \`\`\`
+
+**Why a scalar projection, not \`findById\` twice:** calling \`findById(id)\` twice in one transaction would *not* show this anomaly — Hibernate's first-level cache returns the same instance for the second call without touching the DB, hiding the change. The persistence context gives you repeatable reads for whole entities regardless of the DB isolation level, so you need a scalar query (or \`em.refresh()\`) to observe what the database is actually doing.
+
+**A consistent read is still not a safe write.** If you read the balance and then decrement it, raising isolation doesn't save you — you need \`@Version\` (optimistic) or \`SELECT ... FOR UPDATE\` (pessimistic). Isolation alone won't stop lost updates.
 
 **Production advice:** Don't change isolation level speculatively. Understand your exact consistency requirement, prove READ_COMMITTED is insufficient, then raise it. Every level above READ_COMMITTED trades throughput for correctness.`,
         followUps: [
@@ -4223,42 +4244,30 @@ public void checkAndCharge() { ... } // READ 1 == READ 2, guaranteed
           "Flyway and Liquibase manage **versioned, incremental SQL scripts** that run in order on startup — every schema change is tracked, checksummed, and recorded in a history table. They replace `ddl-auto=update`, which is unpredictable in production (never drops columns, no history, not reviewable). Flyway uses `V{version}__{desc}.sql` files; Liquibase uses XML/YAML changesets. Both run before your app starts, so the schema is always in sync with your code.",
         explanation: `Flyway naming and workflow:
 
-\`\`\`
-src/main/resources/db/migration/
-  V1__create_users_table.sql
-  V2__add_email_to_users.sql
-  V3__create_orders_table.sql
-  V4__add_user_id_index.sql
-\`\`\`
-
 \`\`\`sql
+-- Files live in src/main/resources/db/migration/ and run in version order:
+--   V1__create_users_table.sql
+--   V2__add_email_to_users.sql
+--   V3__create_orders_table.sql
+--   V4__add_user_id_index.sql
+
 -- V2__add_email_to_users.sql
 ALTER TABLE users ADD COLUMN email VARCHAR(255);
 CREATE UNIQUE INDEX idx_users_email ON users(email);
 \`\`\`
 
-Flyway tracks this in \`flyway_schema_history\`:
-
-\`\`\`
-version | description           | checksum   | success
---------|-----------------------|------------|--------
-1       | create users table    | 123456789  | true
-2       | add email to users    | 987654321  | true
-\`\`\`
-
-If you edit \`V2__\` after it's been applied, Flyway detects the checksum mismatch and **refuses to start** — the safety net that prevents silent schema drift.
+Flyway records each applied file in a \`flyway_schema_history\` table — version, description, a **checksum** of the file contents, and whether it succeeded. If you edit \`V2__\` after it's already been applied somewhere, the checksum no longer matches the recorded one and Flyway **refuses to start**. That's the safety net against silent schema drift: migrations are append-only, so fixing a mistake means adding \`V5__\`, never editing \`V2__\`.
 
 **vs \`ddl-auto=update\`:**
 
-\`\`\`yaml
-# NEVER in production
+\`\`\`properties
+# NEVER in production: adds columns but never removes them, leaves no audit
+# trail, drifts between environments, and isn't reviewable in a pull request
 spring.jpa.hibernate.ddl-auto=update
-# Problems: adds columns, never removes them, no audit trail,
-# non-deterministic across environments, not reviewable in PRs
 
-# USE INSTEAD:
-spring.jpa.hibernate.ddl-auto=validate  # just checks schema matches entity
-# Let Flyway own the schema changes
+# USE INSTEAD — validate only checks that the schema matches your entities
+# and fails startup if it doesn't. Flyway owns the actual changes.
+spring.jpa.hibernate.ddl-auto=validate
 \`\`\``,
         followUps: [
           { text: "Why prefer migrations over `ddl-auto=update` in production?" },
@@ -4274,19 +4283,17 @@ spring.jpa.hibernate.ddl-auto=validate  # just checks schema matches entity
         explanation: `What happens without a pool:
 
 \`\`\`
+WITHOUT A POOL
 Request 1 → CREATE connection (30-100ms) → query → CLOSE connection
 Request 2 → CREATE connection (30-100ms) → query → CLOSE connection
 // 100 concurrent users = 100 new DB connections per request cycle
 // DB server limit: 100 connections total → queue builds → timeouts
-\`\`\`
 
-With HikariCP:
-
-\`\`\`
+WITH HIKARICP
 Startup: CREATE 10 connections, hold them open
 Request 1 → BORROW connection (microseconds) → query → RETURN to pool
 Request 2 → BORROW same connection → query → RETURN
-// 100 concurrent users share 10 connections with queueing
+// 100 concurrent users share 10 connections, queueing when all are busy
 \`\`\`
 
 Key HikariCP settings:
@@ -4448,33 +4455,151 @@ SELECT u.name, o.total FROM users u, orders o;
       {
         id: 103,
         text: "What is Spring Security, and what problem does it solve?",
+        answer: "Spring Security is a **filter-based** framework that handles **authentication** (who are you) and **authorization** (what may you do) before a request ever reaches your controller. It also ships the hardening you'd otherwise hand-roll — password hashing, CSRF tokens, session fixation protection, and security response headers. Add `spring-boot-starter-security` and **every endpoint is locked down by default**; you then open up exactly what should be public. Skip it and you scatter `if (user == null) return 401` checks across every controller — and the one you forget is the breach.",
+        explanation: `**Analogy:** a building's security desk. Everyone entering passes one lobby — badge checked once, at the door. You don't post a guard inside every meeting room, and no room can forget to have one.
+
+\`\`\`java
+// BAD — security scattered through controllers
+@RestController
+class OrderController {
+    @GetMapping("/api/orders/{id}")
+    public OrderDto get(@PathVariable Long id, HttpSession session) {
+        User user = (User) session.getAttribute("user");
+        if (user == null) throw new ResponseStatusException(UNAUTHORIZED);  // repeated in 40 methods
+        if (!user.isAdmin()) throw new ResponseStatusException(FORBIDDEN);  // forget once = data leak
+        return orderService.find(id);
+    }
+}
+\`\`\`
+
+\`\`\`java
+// GOOD — one place declares the rules; filters enforce them before the controller runs
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+    @Bean
+    SecurityFilterChain chain(HttpSecurity http) throws Exception {
+        return http
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/orders/**").hasRole("ADMIN")
+                .anyRequest().authenticated())   // default-deny
+            .build();
+    }
+}
+\`\`\`
+
+The controller is now pure business logic — it never sees an unauthenticated request, because the filter chain runs **before \`DispatcherServlet\`** and short-circuits with a 401.
+
+\`anyRequest().authenticated()\` is the line that matters most: it makes the default **deny**, so an endpoint someone adds next sprint is protected before anyone remembers to protect it. The opposite ordering — listing what to secure and leaving the rest open — is how endpoints leak.`,
         followUps: [
           { text: "What is the security filter chain at a high level?" },
-          { text: "How does Spring Security integrate with servlet filters?" },
+          { text: "How does Spring Security run inside a servlet container that knows nothing about Spring beans?" },
           { text: "What defaults does Spring Security enable out of the box?" },
         ],
       },
       {
         id: 104,
         text: "What is the difference between authentication and authorization?",
+        answer: "**Authentication** answers *who are you* — it verifies credentials and stores an `Authentication` object in the `SecurityContext`. **Authorization** answers *what are you allowed to do* — it checks that principal's authorities against the rule for this URL or method. Authentication always runs first; authorization is meaningless without it. The status codes tell them apart: **401 means we don't know who you are, 403 means we know and you still can't have it** — returning 403 for an expired token sends clients chasing the wrong bug.",
+        explanation: `**Analogy:** an airport. Authentication is the passport check at the gate — proving you're you. Authorization is the lounge door — you're definitely you, and you're still not getting in on an economy ticket.
+
+\`\`\`java
+// Authentication happens in a filter: credentials -> Authentication -> SecurityContext
+UsernamePasswordAuthenticationToken auth =
+    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+SecurityContextHolder.getContext().setAuthentication(auth);
+// From here on, "who" is settled. Everything downstream only asks "may they?"
+\`\`\`
+
+\`\`\`java
+// Authorization happens twice: URL-level in the chain, method-level on the bean
+http.authorizeHttpRequests(a -> a
+    .requestMatchers("/api/admin/**").hasRole("ADMIN")   // 403 for a logged-in USER
+    .anyRequest().authenticated());                      // 401 for no token at all
+
+@PreAuthorize("hasRole('ADMIN') or #userId == authentication.name")
+public UserDto getProfile(String userId) { ... }        // 403 if the SpEL is false
+\`\`\`
+
+Spring routes the two failures to different components: \`AuthenticationEntryPoint\` handles "not authenticated" (401), \`AccessDeniedHandler\` handles "authenticated but denied" (403). On a JSON API you override both, or an expired token gets a **302 redirect to /login** and your mobile client parses an HTML page as JSON.`,
         followUps: [
           { text: "Where does each happen in a typical request to a secured API?" },
-          { text: "What is a principal and authorities/roles?" },
+          { text: "What exactly does the `Authentication` object hold after a successful login?" },
           { text: "Can you be authenticated but not authorized? Give an example." },
         ],
       },
       {
         id: 105,
         text: "How does JWT-based authentication work in a Spring Boot application?",
+        answer: "The client logs in once, the server **signs** a JWT holding the user id, roles, and an expiry, and hands it back. Every later request sends it as `Authorization: Bearer <token>`; a custom filter parses it, **verifies the signature and expiry**, and populates the `SecurityContext` — no server-side session, so any instance can serve any request. The token is **signed, not encrypted**: anyone can base64-decode the claims, so never put a password or PII in it. The real cost is revocation — you can't un-issue a token, so keep the access token short (5–15 minutes) and pair it with a revocable refresh token.",
+        explanation: `**Analogy:** a festival wristband. The gate checks your ID once and gives you a tamper-proof band. Every stage after that just looks at the band — nobody phones the gate. Which is also the problem: kick someone out and the band still works until it expires.
+
+\`\`\`java
+// The filter that runs on every request, once, before the controller
+public class JwtAuthFilter extends OncePerRequestFilter {
+    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+            throws ServletException, IOException {
+        String header = req.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            try {
+                Claims claims = jwtService.parseAndVerify(header.substring(7)); // throws if signature/exp bad
+                var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + claims.get("role")));
+                var auth = new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities);
+                SecurityContextHolder.getContext().setAuthentication(auth);
+            } catch (JwtException e) {
+                SecurityContextHolder.clearContext();   // bad token = anonymous, NOT an exception page
+            }
+        }
+        chain.doFilter(req, res);   // must always continue, or the response never completes
+    }
+}
+\`\`\`
+
+\`\`\`java
+// Wire it in: stateless session + the filter placed before form-login's filter
+@Bean
+SecurityFilterChain chain(HttpSecurity http, JwtAuthFilter jwt) throws Exception {
+    return http
+        .csrf(csrf -> csrf.disable())                                     // no cookies = no CSRF vector
+        .sessionManagement(s -> s.sessionCreationPolicy(STATELESS))       // don't create JSESSIONID
+        .authorizeHttpRequests(a -> a
+            .requestMatchers("/api/auth/**").permitAll()
+            .anyRequest().authenticated())
+        .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)
+        .build();
+}
+\`\`\`
+
+Two traps bite people in production. Forget \`STATELESS\` and Spring still creates a session per request — memory grows and you've lost the statelessness you paid for. And **verify the algorithm**, don't just decode: a library that accepts \`alg: none\` or lets the token choose HMAC vs RSA lets an attacker forge any claim they like. Use a vetted library (\`jjwt\`, Nimbus) and a key of at least 256 bits.`,
         followUps: [
-          { text: "What are the parts of a JWT (header, payload, signature)?" },
-          { text: "Where should tokens be stored on the client, and what are XSS/CSRF concerns?" },
+          { text: "What stops a client from editing the claims in its own JWT?" },
+          { text: "Where should the token live on the client, and what attack does each choice expose you to?" },
           { text: "How do you handle token refresh and expiration?" },
         ],
       },
       {
         id: 106,
         text: "What is the difference between session-based and token-based authentication?",
+        answer: "**Session-based**: the server keeps the state and hands the client an opaque `JSESSIONID` cookie; every request looks that session up in server memory or Redis. **Token-based**: the server keeps nothing — the signed token itself carries the identity and the server just verifies the signature. Sessions are **instantly revocable** (delete the row) but need sticky sessions or a shared store to scale out; tokens **scale for free** but stay valid until they expire. Cookies are sent automatically by the browser, which is exactly why sessions need CSRF protection and an `Authorization` header doesn't.",
+        explanation: `**Analogy:** a coat check versus a wristband. The coat check keeps a numbered stub — you hand over a meaningless ticket and the desk looks up what it means. The wristband carries the information on it; nobody looks anything up, and nobody can take it back either.
+
+\`\`\`java
+// Session — the cookie is a lookup key; the real data lives server-side
+// Cookie: JSESSIONID=9F2A...   (opaque, meaningless to the client)
+// Server: sessionStore.get("9F2A...") -> { userId: 42, roles: [ADMIN], cart: [...] }
+// Revoke = session.invalidate();          // effective on the very next request
+// Scale out = sticky sessions at the LB, or spring-session-data-redis
+
+// Token — the cookie/header IS the data, signed so it can't be edited
+// Authorization: Bearer eyJhbGci...   (base64 claims: sub=42, role=ADMIN, exp=...)
+// Revoke = you can't, short of a denylist that re-introduces the state you removed
+// Scale out = nothing to do; any instance verifies with the same key
+\`\`\`
+
+Use **sessions** for a server-rendered app or a first-party web app where instant logout and "log out all devices" matter — with \`spring-session-data-redis\` the scaling objection mostly disappears. Use **tokens** for mobile clients, public APIs, and service-to-service calls where there's no cookie jar and you need cross-domain calls.
+
+The honest middle ground most teams land on: short-lived JWT access tokens plus a **refresh token stored server-side**. Revocation happens at refresh time, so the blast radius of a stolen token is one token lifetime instead of forever. Anyone who tells you JWTs are strictly better than sessions is skipping the revocation conversation.`,
         followUps: [
           { text: "Why are token-based approaches often preferred for stateless REST APIs?" },
           { text: "How does horizontal scaling differ for sticky sessions vs JWT?" },
@@ -4484,15 +4609,94 @@ SELECT u.name, o.total FROM users u, orders o;
       {
         id: 107,
         text: "How do you secure REST APIs using Spring Security?",
+        answer: "Declare one `SecurityFilterChain` bean that turns the API **stateless** (`SessionCreationPolicy.STATELESS`), disables form login and CSRF because there's no cookie or login page, plugs in a **JWT or OAuth2 resource-server filter**, and ends the matcher list with `anyRequest().authenticated()`. Add `@EnableMethodSecurity` and `@PreAuthorize` for rules that depend on the data, not just the URL. Override the `AuthenticationEntryPoint` so failures return **JSON 401**, not a redirect to `/login`. The rule that saves you: order matchers most-specific-first and make the last one deny — new endpoints are then secure by default.",
+        explanation: `\`\`\`java
+// BAD — the mistakes that make an "API" behave like a web app
+http.authorizeHttpRequests(a -> a
+        .anyRequest().permitAll()              // catch-all FIRST: every rule below is dead code
+        .requestMatchers("/api/admin/**").hasRole("ADMIN"))
+    .formLogin(withDefaults());                // 302 -> /login; your mobile client sees HTML
+// plus a session per request, since STATELESS was never set
+\`\`\`
+
+\`\`\`java
+// GOOD — stateless, JSON errors, default-deny
+@Bean
+SecurityFilterChain api(HttpSecurity http, JwtAuthFilter jwt) throws Exception {
+    return http
+        .csrf(csrf -> csrf.disable())
+        .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .formLogin(AbstractHttpConfigurer::disable)
+        .httpBasic(AbstractHttpConfigurer::disable)
+        .authorizeHttpRequests(a -> a
+            .requestMatchers("/api/auth/**", "/actuator/health").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()  // method-specific
+            .requestMatchers("/api/admin/**").hasRole("ADMIN")
+            .anyRequest().authenticated())                                    // last, and denying
+        .exceptionHandling(e -> e
+            .authenticationEntryPoint((req, res, ex) -> {                     // 401 as JSON
+                res.setStatus(401);
+                res.setContentType("application/json");
+                res.getWriter().write("{\\"error\\":\\"unauthorized\\"}");
+            }))
+        .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)
+        .build();
+}
+\`\`\`
+
+**Matcher order is evaluated top-down and the first match wins** — a stray \`permitAll()\` near the top silently opens everything below it, and no test that only checks happy paths will catch it. Write a \`MockMvc\` test that hits each protected endpoint **with no token** and asserts 401; that's the test that catches a bad reorder during review.
+
+Also secure the actuator explicitly. \`/actuator/health\` is fine to expose, but \`/actuator/env\` and \`/actuator/heapdump\` leak credentials and memory contents — keep them behind \`hasRole("ADMIN")\` or off the public port entirely.`,
         followUps: [
           { text: "How do you permit public endpoints like `/login` and `/actuator/health`?" },
-          { text: "How do you disable form login and use a JWT filter instead?" },
+          { text: "What breaks if you add a JWT filter but leave form login and sessions enabled?" },
           { text: "How do you return 401 JSON instead of redirecting to a login page?" },
         ],
       },
       {
         id: 108,
         text: "What is `SecurityFilterChain`, and how do you configure it?",
+        answer: "`SecurityFilterChain` is a **bean** that pairs a request matcher with an ordered list of security filters — since Spring Security 5.7 it's how you configure security, replacing the deprecated `WebSecurityConfigurerAdapter`. You build one by taking `HttpSecurity` as a method parameter, chaining the DSL, and returning `http.build()`. You can register **several** chains: `securityMatcher` decides which requests each one claims, and **the first chain whose matcher hits handles the request — the rest are skipped entirely**. Get the `@Order` wrong and a broad chain swallows requests you meant a narrower one to protect.",
+        explanation: `\`\`\`java
+// The old way — deprecated in 5.7, removed in 6.0. Don't write this.
+@Configuration
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+    @Override protected void configure(HttpSecurity http) { ... }  // inheritance = one config, hard to compose
+}
+\`\`\`
+
+\`\`\`java
+// Two chains: the API is stateless + JWT, the admin UI keeps sessions + form login
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    @Order(1)                                              // most specific FIRST
+    SecurityFilterChain apiChain(HttpSecurity http, JwtAuthFilter jwt) throws Exception {
+        return http
+            .securityMatcher("/api/**")                    // this chain only claims /api/**
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(a -> a.anyRequest().authenticated())
+            .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)
+            .build();
+    }
+
+    @Bean
+    @Order(2)                                              // catch-all LAST
+    SecurityFilterChain webChain(HttpSecurity http) throws Exception {
+        return http
+            .authorizeHttpRequests(a -> a.anyRequest().hasRole("ADMIN"))
+            .formLogin(withDefaults())                     // CSRF stays ON here — cookies are in play
+            .build();
+    }
+}
+\`\`\`
+
+Swap those \`@Order\` values and the catch-all chain matches \`/api/**\` first — your JWT filter never runs and API clients get redirected to a login form. There's no warning; the app starts fine.
+
+Placement inside a chain matters too. \`addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)\` puts your filter after the exception-translation and context-persistence filters but **before** authorization runs, which is the only window where setting the \`SecurityContext\` still counts. Put it after \`FilterSecurityInterceptor\` and every request is denied before your filter ever executes. Set \`logging.level.org.springframework.security=DEBUG\` and Boot prints the resolved chain and every filter in order at startup — that's the fastest way to see which chain actually claimed a request when the behaviour doesn't match the config you think you wrote.`,
         followUps: [
           { text: "Why did Spring Security move away from `WebSecurityConfigurerAdapter`?" },
           { text: "How do you define multiple filter chains for different path patterns?" },
@@ -4502,33 +4706,164 @@ SELECT u.name, o.total FROM users u, orders o;
       {
         id: 109,
         text: "What is CSRF, and how does Spring Security handle it?",
+        answer: "**Cross-Site Request Forgery** is an attack where a malicious page makes the victim's browser fire a state-changing request at your site — and because **cookies are attached automatically**, it arrives fully authenticated. Spring Security defends with the **synchronizer token pattern**: it puts a random token in the session, requires it on every `POST`/`PUT`/`DELETE`, and rejects the request with 403 if it's missing or wrong. The attacker's page can make the browser send the request but **can't read your token** — the same-origin policy stops it. CSRF is enabled by default, and you only turn it off when authentication rides in a header instead of a cookie.",
+        explanation: `**Analogy:** someone forges a cheque in your name and the bank cashes it because the signature is real. Your browser is the signature — it attaches the cookie to every request to that domain, no matter who triggered it.
+
+\`\`\`xml
+<!-- The attack. Victim is logged into your bank in another tab and visits evil.com -->
+<form action="https://yourbank.com/transfer" method="POST">
+  <input type="hidden" name="to" value="attacker" />
+  <input type="hidden" name="amount" value="5000" />
+</form>
+<script>document.forms[0].submit();</script>
+<!-- Browser attaches JSESSIONID automatically -> server sees a valid, authenticated transfer -->
+\`\`\`
+
+\`\`\`java
+// The defence, and when to switch it off
+
+// Cookie-session web app: leave CSRF ON (default). Thymeleaf injects the hidden
+// _csrf field into every <form> automatically; a request without it gets 403.
+
+// Stateless JWT API: no cookie is used for auth, so there's nothing to forge
+http.csrf(AbstractHttpConfigurer::disable);
+
+// SPA on a different origin that DOES use a cookie: keep it on, expose the token to JS
+http.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()));
+\`\`\`
+
+The decision rule is one question: **does the browser attach your credential automatically?** Cookie or HTTP Basic — yes, so you need CSRF protection. A JWT the client reads from storage and puts in an \`Authorization\` header — no, the attacker's page can't add that header, so CSRF adds nothing.
+
+Where teams get burned: they read "JWTs don't need CSRF", disable it, then later store the JWT in a cookie for convenience. The protection is off and the vector is back. If your token lives in a cookie, you need CSRF protection **or** \`SameSite=Strict\`, regardless of what the token contains.`,
         followUps: [
           { text: "Why is CSRF often disabled for pure stateless JWT APIs?" },
-          { text: "When must CSRF protection stay enabled (cookie-based sessions)?" },
+          { text: "When would disabling CSRF actually get your app exploited?" },
           { text: "How does the synchronizer token pattern work?" },
         ],
       },
       {
         id: 110,
         text: "What is role-based access control, and how do you implement it (`@PreAuthorize`, `@Secured`)?",
+        answer: "RBAC means permissions attach to **roles**, not to individual users — you grant `ROLE_ADMIN` once and every admin inherits it. In Spring you enforce it at the URL level with `hasRole(\"ADMIN\")` in the filter chain, and at the method level with **`@PreAuthorize`**, which takes a **SpEL expression** and can see the method's arguments. `@Secured` is the older annotation and only accepts a plain list of role names — no expressions — so `@PreAuthorize` is the one to use. Method security needs **`@EnableMethodSecurity`**; without it the annotations are silently ignored and every call goes through.",
+        explanation: `\`\`\`java
+// URL-level RBAC catches the coarse case, but it can't see the data
+http.authorizeHttpRequests(a -> a
+    .requestMatchers("/api/admin/**").hasRole("ADMIN")       // "ROLE_" prefix added for you
+    .requestMatchers("/api/reports/**").hasAuthority("report:read"));  // no prefix added here
+
+// GET /api/orders/99 passes this check for ANY authenticated user — including
+// the one whose order it isn't. That's a broken-object-level-authorization bug (OWASP #1).
+\`\`\`
+
+\`\`\`java
+@Configuration
+@EnableMethodSecurity          // WITHOUT this line every annotation below is a no-op
+public class MethodSecurityConfig { }
+
+@Service
+public class OrderService {
+
+    @PreAuthorize("hasRole('ADMIN')")                      // runs BEFORE the method body
+    public void deleteOrder(Long id) { ... }
+
+    // SpEL sees the arguments and the authenticated principal — this is the ownership check
+    @PreAuthorize("hasRole('ADMIN') or #customerId == authentication.name")
+    public List<OrderDto> ordersFor(String customerId) { ... }
+
+    // When ownership is only knowable AFTER loading, filter the return value instead
+    @PostAuthorize("returnObject.customerId == authentication.name")
+    public OrderDto findById(Long id) { ... }
+}
+\`\`\`
+
+Two things trip people up. **The \`ROLE_\` prefix is inconsistent**: \`hasRole("ADMIN")\` prepends \`ROLE_\` for you, \`hasAuthority("ADMIN")\` does not — so if your DB stores \`ADMIN\` without the prefix, \`hasRole\` fails and \`hasAuthority\` works, and vice versa. Pick one convention and store authorities to match it.
+
+And method security runs through **Spring AOP proxies**, so it only fires on calls that cross the proxy boundary. A \`@PreAuthorize\` method invoked from another method of the *same* bean is called directly on \`this\` — the annotation is bypassed entirely. Same self-invocation limitation as \`@Transactional\`, same fix: call it from a different bean.`,
         followUps: [
           { text: "What is the difference between roles and authorities in Spring Security?" },
-          { text: "How do you enable method security (`@EnableMethodSecurity`)?" },
-          { text: "When would you use SpEL in `@PreAuthorize` for object-level checks?" },
+          { text: "Why does `@PreAuthorize` silently do nothing on a fresh Boot app?" },
+          { text: "How do you check that a user owns the specific record they're requesting?" },
         ],
       },
       {
         id: 111,
         text: "How do you store passwords securely (`PasswordEncoder`, BCrypt)?",
+        answer: "You **hash** passwords, never encrypt them — encryption is reversible and a leaked key hands over every account. Use Spring's `PasswordEncoder` with **BCrypt** (or Argon2/scrypt), which is deliberately **slow** and generates a **random salt per password** that it stores inside the hash string itself. Verification never decrypts anything: `encoder.matches(rawPassword, storedHash)` re-hashes the input with the stored salt and compares. The work factor is the point — a fast hash like MD5 or SHA-256 lets an attacker try billions of guesses a second against a stolen dump.",
+        explanation: `**Analogy:** a hash is a paper shredder, not a safe. A safe can be opened with the key; shredded paper can only be compared against another shred of the same document. Salting means every document goes through a differently-configured shredder, so identical passwords don't produce identical shreds.
+
+\`\`\`java
+// BAD — each of these is a real incident waiting to happen
+user.setPassword(rawPassword);                            // plain text: dump = game over
+user.setPassword(DigestUtils.md5Hex(rawPassword));        // unsalted + fast: rainbow tables
+user.setPassword(aesEncrypt(rawPassword, secretKey));     // reversible: leak the key, leak everything
+// Unsalted also means two users with the same password get the same hash —
+// crack one row and you've cracked every account that shares it.
+\`\`\`
+
+\`\`\`java
+@Bean
+PasswordEncoder passwordEncoder() {
+    return PasswordEncoderFactories.createDelegatingPasswordEncoder();  // BCrypt by default
+}
+
+// Registration — hash once, store the result
+user.setPassword(passwordEncoder.encode(dto.getRawPassword()));
+// stored: {bcrypt}$2a$10$N9qo8uLOickgx2ZMRZoMye...
+//          ^prefix   ^cost ^22-char salt + hash — the salt travels WITH the hash
+
+// Login — never decrypt, never compare strings directly
+if (!passwordEncoder.matches(dto.getRawPassword(), user.getPassword())) {
+    throw new BadCredentialsException("Invalid credentials");  // same message for bad user AND bad password
+}
+\`\`\`
+
+That \`{bcrypt}\` prefix is what makes **\`DelegatingPasswordEncoder\`** the right default: the stored hash declares its own algorithm, so old \`{md5}\` rows still verify while new ones are written with BCrypt. Re-encode a user's password on their next successful login and the whole table migrates itself, no forced reset.
+
+Two production details. Keep the BCrypt strength at **10–12** — higher is safer but each step doubles login CPU cost, and a strength of 15 will melt your login endpoint under load. And return an **identical error message and similar response time** for "unknown user" and "wrong password"; leaking which one failed turns your login form into a tool for enumerating who has an account.`,
         followUps: [
           { text: "Why should you never store plain-text or reversible encrypted passwords?" },
-          { text: "What is salting, and does BCrypt handle it?" },
-          { text: "How do you migrate from one encoder to another with `DelegatingPasswordEncoder`?" },
+          { text: "Where does the salt live if the database column only stores one hash string?" },
+          { text: "How do you switch hashing algorithms without forcing every user to reset their password?" },
         ],
       },
       {
         id: 112,
         text: "What is OAuth2, and how does Spring Boot integrate with it?",
+        answer: "OAuth2 is a **delegated authorization** protocol: it lets an app act on a user's behalf against another service **without ever seeing their password**. The user authenticates at the authorization server (Google, Okta, Keycloak), which issues a scoped **access token** the app presents to the resource server. OAuth2 is about *authorization* — **OpenID Connect** is the thin layer on top that adds an `id_token` and makes it usable for *login*. In Spring Boot you don't implement any of it: add `spring-boot-starter-oauth2-client` to be the app logging users in, or `spring-boot-starter-oauth2-resource-server` to be the API validating incoming tokens.",
+        explanation: `**Analogy:** a hotel key card. You prove who you are once at reception, and they hand you a card that opens your room and the gym — for three nights. The gym door never learns your name or your credit card; it just checks the card. Reception can cancel it without changing every lock.
+
+\`\`\`yaml
+# Your API as a RESOURCE SERVER — validate tokens someone else issued.
+# Boot fetches the public keys from the issuer and verifies every JWT signature for you.
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://auth.company.com/realms/orders
+\`\`\`
+
+\`\`\`java
+// That's it — no filter to write. Map the token's scopes to your rules:
+@Bean
+SecurityFilterChain chain(HttpSecurity http) throws Exception {
+    return http
+        .authorizeHttpRequests(a -> a
+            .requestMatchers(HttpMethod.GET, "/api/orders/**").hasAuthority("SCOPE_orders:read")
+            .requestMatchers(HttpMethod.POST, "/api/orders/**").hasAuthority("SCOPE_orders:write")
+            .anyRequest().authenticated())
+        .oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults()))
+        .build();
+}
+
+// Read claims straight off the validated token in a controller:
+@GetMapping("/me")
+public String me(@AuthenticationPrincipal Jwt jwt) { return jwt.getSubject(); }
+\`\`\`
+
+**Authorization code flow** in four steps: your app redirects the browser to the authorization server; the user logs in there and consents; the server redirects back with a short-lived **code**; your app exchanges that code for tokens over a **back-channel** HTTPS call using its client secret. The token never travels through the browser URL — that's the whole reason the code step exists. Public clients (SPAs, mobile) have no secret to protect, so they add **PKCE**; the implicit flow that used to serve them is deprecated.
+
+The distinction interviewers push on: **authorization server** issues and signs tokens and owns the login UI; **resource server** owns the data and only ever *validates* tokens. Most teams build resource servers and buy the authorization server. Writing your own is a security project, not a sprint task.`,
         followUps: [
           { text: "What is the difference between OAuth2 and OpenID Connect?" },
           { text: "Explain authorization code flow at a high level." },

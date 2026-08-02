@@ -84,7 +84,40 @@ async function renderContent(text: string): Promise<string> {
         .split(/\n\n+/)
         .map((p) => p.trim())
         .filter(Boolean)
-        .map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+        .map((p) => {
+          const lines = p.split("\n").filter((l) => l.trim().length > 0);
+          const bulletRe = /^\s*-\s+/;
+          const numberRe = /^\s*\d+\.\s+/;
+
+          const runs: { type: "ul" | "ol" | "p"; lines: string[] }[] = [];
+          for (const line of lines) {
+            const type = bulletRe.test(line) ? "ul" : numberRe.test(line) ? "ol" : "p";
+            const last = runs[runs.length - 1];
+            if (last && last.type === type) {
+              last.lines.push(line);
+            } else {
+              runs.push({ type, lines: [line] });
+            }
+          }
+
+          return runs
+            .map((run) => {
+              if (run.type === "ul") {
+                const items = run.lines
+                  .map((l) => `<li>${l.replace(bulletRe, "")}</li>`)
+                  .join("");
+                return `<ul>${items}</ul>`;
+              }
+              if (run.type === "ol") {
+                const items = run.lines
+                  .map((l) => `<li>${l.replace(numberRe, "")}</li>`)
+                  .join("");
+                return `<ol>${items}</ol>`;
+              }
+              return `<p>${run.lines.join("<br>")}</p>`;
+            })
+            .join("");
+        })
         .join("");
     })
     .join("");
@@ -351,6 +384,24 @@ const renderedFollowUpAnswers = await Promise.all(
     color: var(--color-ink);
   }
 
+  .answer-text :global(ul),
+  .answer-text :global(ol) {
+    margin: 0 0 var(--space-sm) 0;
+    padding-left: 1.25rem;
+    list-style-position: outside;
+    color: inherit;
+    line-height: inherit;
+  }
+
+  .answer-text :global(ul:last-child),
+  .answer-text :global(ol:last-child) {
+    margin-bottom: 0;
+  }
+
+  .answer-text :global(li) {
+    margin-bottom: 0.35em;
+  }
+
   .explanation-block {
     padding: var(--space-md) var(--space-lg);
   }
@@ -376,6 +427,24 @@ const renderedFollowUpAnswers = await Promise.all(
 
   .explanation-text :global(code) {
     font-size: 0.88em;
+  }
+
+  .explanation-text :global(ul),
+  .explanation-text :global(ol) {
+    margin: 0 0 var(--space-sm) 0;
+    padding-left: 1.25rem;
+    list-style-position: outside;
+    color: inherit;
+    line-height: inherit;
+  }
+
+  .explanation-text :global(ul:last-child),
+  .explanation-text :global(ol:last-child) {
+    margin-bottom: 0;
+  }
+
+  .explanation-text :global(li) {
+    margin-bottom: 0.35em;
   }
 
   /* ── Shiki VS Code code blocks ── */
@@ -542,6 +611,24 @@ const renderedFollowUpAnswers = await Promise.all(
 
   .followup-answer :global(pre) {
     margin: var(--space-xs) 0;
+  }
+
+  .followup-answer :global(ul),
+  .followup-answer :global(ol) {
+    margin: 0 0 var(--space-xs) 0;
+    padding-left: 1.25rem;
+    list-style-position: outside;
+    color: inherit;
+    line-height: inherit;
+  }
+
+  .followup-answer :global(ul:last-child),
+  .followup-answer :global(ol:last-child) {
+    margin-bottom: 0;
+  }
+
+  .followup-answer :global(li) {
+    margin-bottom: 0.35em;
   }
 
   .followup-hint {

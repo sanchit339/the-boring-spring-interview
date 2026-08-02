@@ -12,6 +12,8 @@
 import { followupAnswersSpring } from "./followup_answers_spring";
 import { followupAnswersJpa } from "./followup_answers_jpa";
 import { followupAnswersSpringCore } from "./followup_answers_spring_core";
+import { followupAnswersSpringBoot } from "./followup_answers_spring_boot";
+import { followupAnswersSecurity } from "./followup_answers_security";
 
 const baseAnswers: Record<string, string> = {
   // ===================== Q1: == vs equals =====================
@@ -175,24 +177,24 @@ const baseAnswers: Record<string, string> = {
     "They produce a specialized `IntStream` of **primitive `int`** values, avoiding boxing overhead and giving numeric terminals like `sum()`, `average()`, `max()` without a reducer. `orderItems.stream().mapToInt(Item::getQuantity).sum()` is cleaner and faster than `reduce(0, Integer::sum)` on a boxed `Stream<Integer>`.",
 
   // ===================== Q17: Comparable vs Comparator =====================
-  "What does `Comparable` define, and how does `Comparator` differ?":
+  "Where is natural ordering defined, and when would you use an external Comparator?":
     "`Comparable` defines the **natural ordering** via `compareTo(T)` on the class itself — one canonical sort, like `String` alphabetical. `Comparator` is a **separate strategy object** (`compare(a,b)`) you pass at the call site for ad-hoc ordering, e.g., `list.sort(Comparator.comparing(User::getCreatedAt).reversed())`. Implement `Comparable` for the obvious default; use `Comparator` for everything else.",
 
-  "Why must `compareTo` be consistent with `equals`?":
-    "Sorted collections like `TreeSet`/`TreeMap` use `compareTo` **instead of `equals`** for equality. If `compareTo` returns 0 for two objects that `equals` says are different, `TreeSet.add` silently drops them.\n\nThe contract: `(x.compareTo(y)==0) == x.equals(y)`. `BigDecimal` famously breaks this — `1.0` and `1.00` are equal by `equals` but `compareTo` returns 0, so they behave differently in `HashSet` vs `TreeSet`.",
+  "What happens if `compareTo` is inconsistent with `equals`?":
+    "Sorted collections like `TreeSet`/`TreeMap` use `compareTo` **instead of `equals`** to decide what's a duplicate. If `compareTo` returns 0 for two objects that `equals` says are different, `TreeSet.add` silently drops the second one.\n\nThe contract: `(x.compareTo(y)==0) == x.equals(y)`. `BigDecimal` famously breaks it — `new BigDecimal(\"1.0\")` and `new BigDecimal(\"1.00\")` are **not equal** by `equals` (it compares scale as well as value) but `compareTo` returns **0**. So a `HashSet` keeps both and a `TreeSet` keeps one, from the same pair of objects.",
 
-  "How do you chain multiple sort criteria with `Comparator`?":
+  "How do you sort a list of objects by multiple fields using Comparator chaining?":
     "Use `Comparator.thenComparing`: `Comparator.comparing(User::getLastName).thenComparing(User::getFirstName).thenComparingInt(User::getAge)`. Each stage is the tiebreaker for the previous one. Tack on `.reversed()` at the end or `.reversed()` on a single extractor to flip just that field.",
 
   // ===================== Q18: diamond problem =====================
-  "How does Java 8 resolve a class inheriting the same `default` method from two interfaces?":
+  "What happens if two interfaces provide the same default method — how do you resolve it?":
     "It's a **compile error** unless the class overrides the method. The rule (\"class wins\"): a concrete superclass method beats any interface default, and if two interfaces provide competing defaults you **must** disambiguate with `InterfaceName.super.method()`. This avoids the C++ diamond ambiguity by forcing an explicit choice.",
 
-  "Can a class implement two interfaces with the same method signature?":
-    "Yes — if both are **abstract**, one implementation satisfies both. The conflict only arises when one or both are `default` methods with bodies; then you must override and pick. Pure abstract signatures are just contracts, and a single method body honors all of them.",
+  "Why doesn't Java allow multiple class inheritance?":
+    "Because classes carry **state and constructors**. If `Employee` extended both `Person` and `Auditable` and each declared a `name` field, the JVM couldn't say which `name` the instance holds or what order the constructors run.\n\nInterfaces multiply-inherit safely because they hold **no instance state** — a `default` method is behaviour only, so a collision has exactly one resolution and the compiler makes you write it via `Interface.super.method()`. That's why `implements A, B, C` is fine but `extends A, B` isn't.",
 
-  "What is the `Object` class method priority when a class implements an interface with a default method it also inherits from a superclass?":
-    "**Class always wins.** Methods from `java.lang.Object` (`equals`, `hashCode`, `toString`) inherited from a real class take priority over any `default` implementation an interface tries to provide. That's why an interface can't \"override\" `Object.toString` with a default — the JVM ignores it in favor of `Object`'s version unless the class itself overrides.",
+  "How does class method priority work when a class implements an interface with a default method it also inherits from a superclass?":
+    "**The class hierarchy always wins, silently.** If `BaseService` declares `void log()` and `Auditable` supplies a `default void log()`, then `class OrderService extends BaseService implements Auditable` runs **`BaseService.log()`** — no compile error, no warning that the default even exists.\n\nDefaults only fill gaps the superclass chain doesn't already cover, which is what lets you add one without breaking implementers. Want the interface version? Override it and call `Auditable.super.log()`.",
 
   // ===================== Q19: overloading vs overriding =====================
   "Is return type considered for overloading? What about for overriding (covariant returns)?":
@@ -374,4 +376,6 @@ export const followupAnswers: Record<string, string> = {
   ...followupAnswersSpring,
   ...followupAnswersJpa,
   ...followupAnswersSpringCore,
+  ...followupAnswersSpringBoot,
+  ...followupAnswersSecurity,
 };
