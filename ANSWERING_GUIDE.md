@@ -32,6 +32,7 @@ content file** and **a set of answer-bank files**; everything else is layout.
 | `src/data/followup_answers_spring.ts` | Bank — `spring-mvc-rest` (Q69–Q83). Note the misleading name. |
 | `src/data/followup_answers_jpa.ts` | Bank — `spring-data-jpa` (Q84–Q102) |
 | `src/data/followup_answers_security.ts` | Bank — `security` (Q103–Q112) |
+| `src/data/followup_answers_microservices.ts` | Bank — `microservices` (Q113–Q124) |
 | `src/data/types.ts` | `Category`, `Question`, `FollowUp` interfaces |
 | `src/components/QuestionCard.astro` | Renders a question. Contains the markdown renderer — see §5. |
 
@@ -124,10 +125,21 @@ library. Only these work:
 | `` `inline code` `` | yes | not inside `<pre>` |
 | ` ```lang ... ``` ` fenced blocks | yes | Shiki, `dark-plus` theme |
 | Blank-line paragraphs | yes | `\n\n` → `<p>`, single `\n` → `<br>` |
-| `#` headers, `-` bullets, tables, links | **NO** | render as literal text |
+| `- ` bullets | yes | consecutive `- ` lines become one `<ul>` |
+| `1. ` numbered lists | yes | consecutive `1. ` lines become one `<ol>` |
+| `#` headers, tables, links | **NO** | render as literal text |
 
-**Bullets and headers do not render.** Follow-up answers are prose only — which
-matches `answer_rules.md` anyway.
+**Headers do not render. Lists do** — `QuestionCard.astro` groups consecutive
+`- ` lines into a `<ul>` and consecutive `1. ` lines into an `<ol>`, in `answer`
+and `explanation` alike. A list must start on its own line; put a blank line
+before it so it isn't absorbed into the preceding paragraph.
+
+Use one **only for genuinely enumerable content** — the steps to make a class
+immutable, the four Coffman conditions. `answer_rules.md` still says prose by
+default, and that stands: a list of three loosely-related sentences reads worse
+than the paragraph it replaced. What a list *does* fix is the "colon plus
+inline `(1)… (2)… (3)…`" run-on, which is the single most common way answers
+blow the 30-word sentence cap.
 
 Supported code-block languages (anything else silently falls back to plain text):
 `java`, `xml`, `yaml`, `properties`, `bash`, `sh`, `json`, `sql`, `groovy`, `kotlin`
@@ -141,14 +153,38 @@ Bank files are `.ts`, and the strings are double-quoted, so:
 - Prefer a **template literal** (backticks) for anything with code fences — but
   then every `` ` `` inside must be escaped as `` \` ``, which is why `questions.ts`
   is full of `` \`\`\`java ``. For short prose answers, stick with double quotes.
+- Inside a template literal, a Spring placeholder must be escaped: write
+  `` \${server.port} ``, not `` ${server.port} ``. Unescaped, TS reads it as an
+  interpolation and either fails to compile or silently substitutes a value.
+  Property examples are full of these, so it comes up constantly.
 - The renderer HTML-escapes `&`, `<`, `>` outside code blocks, so write them
   plainly — don't pre-escape to `&amp;`.
+
+#### The one that will actually bite you: the closing backtick
+
+Every backtick *inside* an `explanation` is escaped (`` \` ``), so the hand
+reflexively escapes the **closing delimiter** too and writes `` \`, `` instead
+of `` `, ``. The literal stays open, swallows the next question whole, and
+esbuild reports the failure **hundreds of lines later** as
+`Expected "}" but found ":"` — pointing at an innocent line. Adding a whole
+category, this happened on 12 of 12 explanations.
+
+Check it directly rather than reading the parse error:
+
+```bash
+# should print nothing; anything it prints is an unclosed explanation
+grep -n '\\`,$' src/data/questions.ts
+```
+
+If it does print, only fix lines whose **next** line is `followUps: [` — a
+mid-paragraph inline code span followed by a comma matches the same pattern and
+is correct as-is.
 
 ---
 
 ## 6. Current coverage
 
-158 questions, 474 follow-ups, **336 answered / 138 missing** (as of last edit).
+158 questions, 474 follow-ups, **372 answered / 102 missing** (as of last edit).
 
 | Category | Range | Qs | main answer | explanation | follow-up answers |
 |---|---|---|---|---|---|
@@ -159,7 +195,7 @@ Bank files are `.ts`, and the strings are double-quoted, so:
 | `spring-mvc-rest` | Q69–Q83 | 15 | 15/15 | 15/15 | 45/45 |
 | `spring-data-jpa` | Q84–Q102 | 19 | 19/19 | 19/19 | 57/57 |
 | `security` | Q103–Q112 | 10 | 10/10 | 10/10 | 30/30 |
-| `microservices` | Q113–Q124 | 12 | **0/12** | **0/12** | **0/36** |
+| `microservices` | Q113–Q124 | 12 | 12/12 | 12/12 | 36/36 |
 | `testing` | Q125–Q132 | 8 | **0/8** | **0/8** | **0/24** |
 | `build-git` | Q133–Q142 | 10 | **0/10** | **0/10** | **0/30** |
 | `system-design` | Q143–Q152 | 10 | **0/10** | **0/10** | **0/30** |
@@ -182,7 +218,7 @@ needed rewriting. **Check that a stranded answer still answers the current
 question before re-keying it** — an orphan can mean either drift or replacement,
 and only the verification script tells you it exists at all.
 
-Five categories have **nothing at all** — each needs a new bank file per §4.
+Four categories have **nothing at all** — each needs a new bank file per §4.
 
 ---
 
@@ -202,6 +238,7 @@ const cat = categories.find(c => c.id === TARGET)!;
 let missing = 0;
 for (const q of cat.questions) {
   if (!q.answer) console.log(`Q${q.id} MAIN ANSWER MISSING`);
+  if (!q.explanation) console.log(`Q${q.id} EXPLANATION MISSING`);
   for (const f of q.followUps)
     if (!f.answer) { missing++; console.log(`Q${q.id} FOLLOWUP UNANSWERED: ${f.text}`); }
 }
@@ -231,17 +268,54 @@ Then confirm it renders:
 
 ```bash
 npx astro build
-grep -o 'class="followup-answer' dist/<category>/index.html | wc -l   # should equal the follow-up count
+grep -o 'class="followup-answer' dist/<category>/index.html | wc -l   # = follow-up count
+grep -o '<pre class="shiki-block' dist/<category>/index.html | wc -l  # <= 2 x question count
+
+# nothing leaked through as literal source: all three should be 0
+grep -c '\\`' dist/<category>/index.html      # stray escaped backticks
+grep -c '```'  dist/<category>/index.html      # unrendered fences
 ```
 
-Clean up `/tmp` scratch files when done.
+The `shiki-block` count is the cheapest check on `answer_rules.md` Rule 7 — **max
+2 code blocks per explanation**. Over the cap means you need to merge two blocks
+(a BAD and GOOD pair reads fine as one block with a comment between them) or move
+config into prose with inline code.
+
+Note that `${...}` **should** still appear in the rendered HTML — Spring
+placeholders in code samples are meant to survive as literal text. It's `\` and
+` ``` ` that indicate an escaping bug.
+
+Put scratch files in the session scratchpad directory rather than `/tmp`, and
+clean them up when done.
 
 ---
 
 ## 8. Editing follow-up *questions* (not just answers)
 
-Reword a follow-up when it **contains its own answer** or **restates the parent
-question**. Both patterns were common and are worth fixing on sight:
+A follow-up has to be a question an interviewer would **actually ask a 2 YoE
+candidate next**, given what they just said. Not filler, not invented to fill a
+slot of three, not trivia. Four patterns fail that bar and are worth fixing on
+sight:
+
+- **Gives away its own answer** — a parenthetical that names the answer leaves
+  nothing to ask. `(Coffman conditions)`, `(Jackson)`, `(thread dump, jstack)`.
+- **Restates the parent** — if the parent is "How do you create an immutable
+  class?", then "What steps make a class immutable?" is the same question twice.
+- **CV prompt** — "Have you used X?", "Name projects you've used or know."
+  You can't answer that from the page, and it isn't a technical question.
+- **Trivia nobody asks** — "Name a few `ApplicationContext` implementations."
+  Real interviewers ask which one you *get*, and why it matters.
+
+The reliable replacement is the **failure mode**: what breaks, what you'd see,
+how you'd diagnose it. `(final class, final fields, defensive copies)` became
+"You made every field `private final` — how can the object still change?"
+
+Word overlap with the parent is **not** a defect — "How does `@Version`
+implement optimistic locking?" shares most of its nouns with its parent and is
+exactly right. Judge whether it asks something *new*, not whether it repeats
+vocabulary.
+
+Both older patterns are also worth fixing on sight:
 
 ```
 BAD   What interface do you implement (`HealthIndicator`)?
@@ -282,8 +356,33 @@ Beyond `answer_rules.md`:
   // ===================== Q61: Actuator =====================
   ```
 - Keep bank entries in the same order as the questions in `questions.ts`.
-- Length: 3–5 sentences. Long enough to show depth, short enough to say out loud
-  in an interview.
+- **Length follows the question, not a quota.** "Can an interface have a
+  constructor?" is done in two sentences; "How does `HashMap` work internally?"
+  earns a paragraph or two. Padding a short answer to hit five sentences adds
+  the filler Rule 2 exists to remove, and truncating a genuinely layered one
+  loses the part that shows understanding. The test is whether every sentence
+  is doing work — not the count.
+
+### The `answer` field is spoken, not read
+
+The rules live in **`answer_rules.md` Rule 2** — sayable (~30-word sentence cap,
+opening definition kept whole), learnable (anchor to a number, a failure mode, or
+a named thing), and no LARPing or interview meta-commentary. Read it before
+writing; what follows is just how to *check* the result.
+
+The sentence cap is the only part a script can catch. Split on sentence
+boundaries and flag anything over 30 words, ignoring the first:
+
+```bash
+python3 -c "
+import re,sys
+t=open('src/data/questions.ts').read()
+sec=t[t.index('id: \"microservices\"'):t.index('id: \"testing\"')]   # your range
+for m in re.finditer(r'id: (\d+),\n\s*text: \".*?\",\n\s*answer: \"(.*?)\",\n\s*explanation:', sec, re.S):
+    for i,s in enumerate(re.split(r'(?<=\.) (?=[A-Z*\`])', m.group(2))):
+        if i and len(s.split())>30: print('Q'+m.group(1), len(s.split()), s[:90])
+"
+```
 
 ---
 
@@ -293,6 +392,7 @@ Beyond `answer_rules.md`:
 - [ ] Key matches the follow-up text **exactly** — copy-paste it, don't retype
 - [ ] New bank file: **both** the import and the spread added in `followup_answers.ts`
 - [ ] Quotes escaped (`\"`); backticks escaped if using a template literal
-- [ ] No bullets/headers in prose (they don't render)
+- [ ] No `#` headers (they don't render); `- ` / `1. ` lists do render — use them
+      only for genuinely enumerable content
 - [ ] Verification script: **0 unanswered, 0 orphan keys**
 - [ ] `npx astro build` passes and the rendered count matches

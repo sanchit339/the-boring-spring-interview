@@ -15,12 +15,56 @@ Every question gets exactly two fields:
 
 ## Rule 2 — The `answer` Field Rules
 
+**This is what the candidate says out loud.** Not what they'd read off a page —
+what they'd say to a person across a table, from memory, under pressure. The
+interviewer is judging whether you *understand* it, not whether you can recite a
+definition. Every rule below follows from that.
+
+### Structure
+
 - State WHAT the thing is in one sentence
 - State the KEY DIFFERENCE or KEY RULE in the next sentence
 - End with WHEN TO USE IT or WHAT BREAKS IF YOU DON'T
 - Bold the most important terms using **bold**
 - No bullet points. No headers. Prose only.
 - Never say "In conclusion" or "It's important to note"
+
+### Sayable
+
+- **Cap sentences at roughly 30 words.** A sentence carrying a colon plus a
+  `while`/`which` clause is two or three sentences wearing a trench coat — split
+  it. The content stays identical; only the breathing changes.
+- **Keep the opening definition as one unit**, even if it runs long. Those are
+  plain and sayable as written, and chopping them up makes them worse. The cap
+  applies to everything *after* the first sentence.
+- Read it aloud before you commit it. If you run out of breath or lose the
+  thread halfway, so would the candidate — and so would the interviewer.
+
+### Learnable
+
+The answer has to be **recallable**, not merely correct. Memory hangs off
+concrete things, so anchor every answer to at least one:
+
+- a **number** — "a dead instance stays in the registry for up to 90 seconds"
+- a **failure mode** — "stock reserved forever for an order that doesn't exist"
+- a **named thing** — `OrderService`, `PENDING`, `Idempotency-Key`
+
+An answer assembled purely from abstract nouns can be word-perfect and still be
+impossible to reproduce in a room. Concrete beats complete.
+
+### Not LARPing
+
+- Write for a **2 YoE candidate answering honestly**, not a staff engineer
+  performing seniority. No implied war stories, no scale nobody asked about, no
+  tool name-dropping the candidate couldn't defend on the very next follow-up.
+- If a sentence would collapse under "have you actually done that?", cut it.
+- **No interview meta-commentary.** "Which is the most common stale answer here",
+  "the answer interviewers want to hear" — that's study-guide voice *about* the
+  answer, not the answer. The technical fact stays in `answer`; the framing moves
+  to `explanation`, which is allowed to coach.
+
+The bar: a candidate should be able to **learn this once and say it confidently**,
+and it should still be technically right if the interviewer pushes.
 
 ---
 
