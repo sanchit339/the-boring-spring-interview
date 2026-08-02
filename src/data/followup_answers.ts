@@ -4,7 +4,7 @@
  * FollowUp objects at runtime without touching questions.ts.
  *
  * Style (per answer_rules.md):
- *  - 2-5 sentences, prose, no bullets/headers
+ *  - Length follows the question — no sentence quota, no padding
  *  - Bold the terms that actually matter
  *  - No GPT fluff, no "In conclusion", active voice, contractions
  *  - BAD/GOOD code only where it proves understanding
@@ -14,6 +14,7 @@ import { followupAnswersJpa } from "./followup_answers_jpa";
 import { followupAnswersSpringCore } from "./followup_answers_spring_core";
 import { followupAnswersSpringBoot } from "./followup_answers_spring_boot";
 import { followupAnswersSecurity } from "./followup_answers_security";
+import { followupAnswersMicroservices } from "./followup_answers_microservices";
 
 const baseAnswers: Record<string, string> = {
   // ===================== Q1: == vs equals =====================
@@ -23,11 +24,11 @@ const baseAnswers: Record<string, string> = {
   "Why must `equals()` and `hashCode()` always be overridden together?":
     "The contract says: if `a.equals(b)` then `a.hashCode() == b.hashCode()`. Break it and `HashMap`/`HashSet` fall apart — two equal objects can land in different buckets, so `map.get(key2)` returns `null` even though `key1.equals(key2)`.\n\nOverride `equals` without `hashCode` and lookups become **non-deterministic**. Rule: derive `hashCode` from the **same fields** `equals` uses.",
 
-  "What is the contract of `equals()` (reflexive, symmetric, transitive, consistent)?":
+  "What contract does `equals()` have to satisfy?":
     "**Reflexive** — `a.equals(a)` always true. **Symmetric** — `a.equals(b)` implies `b.equals(a)`. **Transitive** — `a.equals(b)` and `b.equals(c)` implies `a.equals(c)`. **Consistent** — repeated calls return the same result while fields don't change, and `a.equals(null)` must be `false`.\n\nMix types in `equals` (the `Point` vs `ColoredPoint` trap) and you break symmetry — collections then behave unpredictably.",
 
   // ===================== Q2: String / StringBuilder / StringBuffer =====================
-  "Why is `String` immutable, and what benefits does that provide (string pool, security, thread-safety)?":
+  "Why is `String` immutable, and what does that buy you?":
     "Immutability gives four wins: the JVM can **intern** literals in the string pool (memory reuse), strings are **thread-safe** with zero synchronization, the `hashCode` is cached after first compute (fast `HashMap` keys), and a password or path passed to untrusted code can't be mutated afterward. The trade-off is every \"edit\" allocates a new object, which is why hot loops use `StringBuilder`.",
 
   "When would you choose `StringBuffer` over `StringBuilder` in modern code?":
@@ -57,7 +58,7 @@ const baseAnswers: Record<string, string> = {
     "When the backing array is full, `add()` allocates a **new array ~1.5x** the old size (`oldCapacity + (oldCapacity >> 1)`), copies elements over via `Arrays.copyOf`, then inserts. That copy is `O(n)` but **amortized `O(1)`** per add.\n\nIf you know the size up front, pass it to the constructor (`new ArrayList<>(10_000)`) to skip repeated resizing — a real win for big batches.",
 
   // ===================== Q5: HashMap internal =====================
-  "What changed in Java 8 regarding collision handling (linked list → red-black tree)?":
+  "What changed in Java 8 regarding collision handling?":
     "Before Java 8, collisions stacked entries in a **linked list**, so a malicious or unlucky set of keys degraded `get` to `O(n)` (the classic hash-DoS attack).\n\nJava 8 converts a bucket to a **red-black tree** once it holds **8+ entries** (and back to a list below 6), capping worst case at `O(log n)`. To tree, keys must be `Comparable`; otherwise it falls back to `System.identityHashCode` ordering.",
 
   "What is the load factor, and when does rehashing occur?":
@@ -87,8 +88,8 @@ const baseAnswers: Record<string, string> = {
     "`HashSet` allows **one `null`** (backing HashMap allows a null key). `TreeSet` **does not** — it compares elements with `compareTo`/`Comparator`, and calling `compareTo(null)` throws `NullPointerException`. Same null story as their Map counterparts.",
 
   // ===================== Q8: immutability =====================
-  "What steps are required to make a class truly immutable (final class, final fields, defensive copies)?":
-    "Mark the class **`final`** (or make all constructors private) so it can't be subclassed. Make every field **`final`** and **`private`**. Don't expose setters or any method that mutates state. For any **mutable** field (a `Date`, a `List`), copy it **in on construction** and **out on access** (defensive copies). Initialize everything in the constructor — no lazy mutable state.",
+  "Why does an immutable class also need to be `final`?":
+    "Because a subclass can undo every guarantee you just made. Leave the class open and someone writes `class MutableMoney extends Money`, adds a mutable field, and overrides `getAmount()` to return whatever it likes. Your code accepts it — it's still a `Money` — so every caller that trusted immutability is now holding something that changes.\n\nIt also breaks the thread-safety guarantee people rely on: safe publication of an immutable object depends on `final` fields being frozen at construction, and a subclass that adds non-`final` state loses that.\n\nMarking the class `final` is the blunt fix. If you need to allow subclasses, make the **constructor private** and hand out instances through a static factory — you control what actually gets built. Records are `final` for exactly this reason.",
 
   "How do you handle mutable fields (like `Date` or `List`) inside an immutable class?":
     "**Defensive copies both ways.** In the constructor: `this.date = new Date(input.getTime())` — never store the reference the caller passed, or they can mutate it later. In the getter: return `new Date(this.date.getTime())`, or for collections return an unmodifiable view (`Collections.unmodifiableList`) or a copy. Modern code uses `java.time` (already immutable) and `List.of(...)`.",
@@ -197,7 +198,7 @@ const baseAnswers: Record<string, string> = {
     "**The class hierarchy always wins, silently.** If `BaseService` declares `void log()` and `Auditable` supplies a `default void log()`, then `class OrderService extends BaseService implements Auditable` runs **`BaseService.log()`** — no compile error, no warning that the default even exists.\n\nDefaults only fill gaps the superclass chain doesn't already cover, which is what lets you add one without breaking implementers. Want the interface version? Override it and call `Auditable.super.log()`.",
 
   // ===================== Q19: overloading vs overriding =====================
-  "Is return type considered for overloading? What about for overriding (covariant returns)?":
+  "Can two methods differ only by their return type?":
     "**Overloading** — return type alone doesn't distinguish overloads; the signature (name + param types) must differ, so `int f()` and `String f()` is illegal. **Overriding** — return type can be a **covariant subtype**: a subclass override may return `Optional<Order>` when the parent declared `Optional<? extends Entity>`, or `MyBuilder` when the parent returned `Builder`. Parameter types must match exactly.",
 
   "Can you override a static method? What is method hiding?":
@@ -210,8 +211,8 @@ const baseAnswers: Record<string, string> = {
   "When are static blocks executed relative to constructors?":
     "**Static initializers run once, when the class is first loaded**, before any instance constructor and before `main`. Instance initializers and constructors run **per object**, at `new` time. Order within a class: static blocks top-to-bottom at class load, then (per instance) instance initializers top-to-bottom then the constructor body.",
 
-  "Can you override a static method? Why or why not?":
-    "No — overriding is **dynamic dispatch** based on the actual object's runtime type, but static methods belong to the **class**, not instances, so there's no virtual lookup to override. Re-declaring a static in a subclass **hides** the parent's version; the call site's reference type decides which runs. Polymorphism needs an instance, and statics have none.",
+  "Why is static mutable state a problem in a Spring application?":
+    "Because a `static` field is shared by every thread in the JVM, and a Spring app is serving requests on many threads at once. A `static Map` cache or a `static SimpleDateFormat` in a `@Service` is an unsynchronized shared mutable — you get corrupted data or garbled dates under load, and it won't reproduce on your laptop with one user.\n\nIt also defeats the container. Statics aren't injected, so you can't swap them per profile or mock them in a test, and state written by one test leaks into the next because the class stays loaded across the whole suite.\n\nKeep beans stateless and put shared state where it's managed — a bean field on a singleton is fine if it's immutable, and anything genuinely shared and mutable belongs in a cache or the database. `static final` constants are not the problem; `static` **mutable** state is.",
 
   "What are static imports, and when are they appropriate?":
     "`import static` lets you use a class's static members by **unqualified name** — `assertEquals(...)` instead of `Assertions.assertEquals(...)`. Appropriate for test classes (AssertJ/JUnit) and heavy math (`import static java.lang.Math.*`). Avoid it for application code where the qualifying class adds clarity — `Color.RED` reads better than a bare `RED`.",
@@ -263,14 +264,14 @@ const baseAnswers: Record<string, string> = {
   "What is a `Future` and how do you get results from async tasks?":
     "A `Future` is a **handle to a pending result**. `Future<Integer> f = executor.submit(callable); ... Integer r = f.get();` — `get()` blocks until done, or `get(timeout, unit)` throws `TimeoutException`. `isDone()` polls; `cancel(true)` interrupts. For composable async, `CompletableFuture` is far more powerful — chaining, combining, error callbacks.",
 
-  "How do you configure a custom thread pool in a Spring Boot app (`@Async`)?":
+  "How do you configure a custom thread pool in a Spring Boot app?":
     "Define an `Executor` bean and reference it via `@Async(\"name\")`. A `ThreadPoolTaskExecutor` lets you set `corePoolSize`, `maxPoolSize`, `queueCapacity`, and a `RejectedExecutionHandler`. **Always name the threads** (`new CustomizableThreadFactory(\"orders-\"))`) for logs/thread dumps. Critically: `@Async` only works on **public methods called from outside the bean** (proxy limitation).",
 
   // ===================== Q26: deadlock =====================
-  "What are the four necessary conditions for deadlock (Coffman conditions)?":
+  "What conditions all have to hold at once for a deadlock to form?":
     "**Mutual exclusion** (resource held exclusively), **hold and wait** (holding one resource while requesting another), **no preemption** (can't force-release), and **circular wait** (a cycle of threads each waiting on the next). Break **any one** — typically circular wait by enforcing a global lock-ordering — and deadlocks can't occur.",
 
-  "How would you diagnose a deadlock in a running JVM (thread dump, jstack)?":
+  "How would you diagnose a deadlock in a JVM that's already hung?":
     "`jstack <pid>` prints every thread's stack and state; a deadlock shows threads stuck in `BLOCKED` waiting on locks held by each other — `jstack` even prints a \"Found one Java-level deadlock\" section. Alternatives: `jcmd <pid> Thread.print`, VisualVM, or `kill -3 pid` to dump to stdout. In prod, automate periodic thread dumps so you catch it when it happens.",
 
   "How do lock ordering and timeouts help prevent deadlocks?":
@@ -280,7 +281,7 @@ const baseAnswers: Record<string, string> = {
   "What is the generational hypothesis, and how do young/old gen work?":
     "Most objects **die young** (temp vars, request DTOs); the few that survive tend to live long (caches, singletons). So the heap is split: **young gen** (Eden + two survivor spaces) collected often and fast via copying; objects that survive several young collections get **promoted** to **old/tenured gen**, scanned rarely. This makes GC dramatically cheaper than full-heap sweeps.",
 
-  "Name common GC algorithms (G1, ZGC, Parallel) and when you might pick one.":
+  "Which collector does a modern JVM use by default, and when would you change it?":
     "**G1** (default since Java 9) — predictable pause times, good general purpose. **ZGC/Shenandoah** — sub-millisecond concurrent pauses for latency-critical big heaps (100GB+). **Parallel** — maximize throughput for batch jobs where pauses don't matter. Java 17+: G1 is the safe default; reach for ZGC only if you measure pause-time problems.",
 
   "What is the difference between `StackOverflowError` and `OutOfMemoryError`?":
@@ -307,18 +308,18 @@ const baseAnswers: Record<string, string> = {
     "**Abstraction** is about *what* a thing does — hiding complexity behind an interface (`interface PaymentGateway { charge(); }`) so callers don't think about Stripe vs PayPal internals.\n\n**Encapsulation** is about *how* it's built — bundling state + behavior and controlling access via `private` fields/getters. Abstraction hides design; encapsulation hides data. A well-designed class uses both: abstract interface, encapsulated implementation.",
 
   // ===================== Q30: polymorphism =====================
-  "How does method overloading relate to compile-time polymorphism?":
+  "Why is overloading resolved before the program even runs?":
     "Overloading is resolved by the compiler based on the **static (declared) argument types** at the call site — that's \"static\" or \"compile-time\" polymorphism. `print(int)` vs `print(String)` is picked at compile time, before any object exists. It's sometimes called *ad-hoc* polymorphism because each overload is effectively a separate method sharing a name.",
 
-  "How does the JVM resolve overridden methods at runtime (dynamic dispatch)?":
+  "How does the JVM know which overridden method to call?":
     "Every object carries a pointer to its **class's virtual method table (vtable)**. When you call `animal.speak()` via a `Animal` reference, the JVM looks up the `speak` slot in the **actual runtime class's** vtable (e.g., `Dog`), not the declared type. That indirection is dynamic dispatch — the override always wins. `final`, `private`, and `static` methods skip the vtable because they can't be overridden.",
 
   "Can constructors be polymorphic?":
     "**No.** Constructors aren't inherited and aren't overridden, so there's no dynamic dispatch on them — you always call a specific constructor via `new ClassName(...)`. What you *can* do is hide construction behind a **factory method** that returns the supertype and picks the concrete class: `static Animal create(...)` returning `new Dog()`. Polymorphism of creation is achieved via factories, not constructors.",
 
   // ===================== Q31: composition vs inheritance =====================
-  "What is the \"favor composition over inheritance\" principle?":
-    "Prefer **holding a reference** to another object (`class Order { private PriceCalculator calc; }`) over **extending** it (`class Order extends PriceCalculator`). Inheritance locks you into the parent's API and implementation forever, breaks when the parent changes, and stops you subclassing something else. Composition lets you swap the collaborator at runtime and test it in isolation — Effective Java Item 18.",
+  "What does `extends` commit you to that holding a field doesn't?":
+    "To the parent's **entire public surface, permanently**. `class Order extends PriceCalculator` means every public method on `PriceCalculator` is now part of `Order`'s API whether it makes sense for an order or not, and you can never take one away. You've also spent your one superclass slot, and you're exposed to the parent changing under you.\n\nHolding a field commits you to nothing: `class Order { private PriceCalculator calc; }` exposes only what you choose to delegate, lets you swap the collaborator per environment or per test, and lets you hold several. That's the practical content of Effective Java Item 18.",
 
   "How does composition help avoid the fragile base class problem?":
     "With inheritance, a parent class change (renaming a protected method, shifting call order) can silently break subclasses it never knew about — the \"fragile base class.\" Composition only depends on the parent's **public API**, so internal refactors don't ripple. You also avoid unintended method inheritance (a subclass accidentally overriding something it didn't mean to expose).",
@@ -327,7 +328,7 @@ const baseAnswers: Record<string, string> = {
     "When there's a true **\"is-a\"** relationship and the subclass genuinely specializes the parent's contract — `ArrayList extends AbstractList`, `HashSet extends AbstractSet`, or your `BaseEntity` with `id`/`createdAt` fields and lifecycle hooks. The framework controls both sides, the hierarchy is shallow, and the subclass truly substitutes for the parent everywhere. If you can't say \"B is an A\" in plain English, use composition instead.",
 
   // ===================== Q32: coupling and cohesion =====================
-  "Why is high cohesion and low coupling desirable in a Spring layered architecture?":
+  "How do the controller, service, and repository layers reflect cohesion and coupling?":
     "Layers (controller → service → repository) keep each layer **cohesive** — controllers do HTTP, services do business rules, repositories do persistence — so a change in one concern lives in one place. Low coupling between layers (talking only through interfaces) means swapping the repository impl or mocking it in tests doesn't ripple. The payoff: localized change, easy testing, parallel team work.",
 
   "How does dependency injection reduce coupling?":
@@ -343,7 +344,7 @@ const baseAnswers: Record<string, string> = {
   "How does Interface Segregation apply to Spring repository interfaces?":
     "Don't force a repo to extend a fat interface with methods it doesn't need. Spring Data lets you split: `interface ReadRepository<T> { findById(...); }`, `interface WriteRepository<T> { save(...); }`, and have `OrderRepository extends ReadRepository, WriteRepository` while `ReadOnlyCatalogRepository extends ReadRepository`. Clients depend only on what they use — no client forced to call `delete()` it shouldn't.",
 
-  "Give a real violation of Single Responsibility you've seen (or would fix) in a controller.":
+  "What does a Single Responsibility violation look like in a controller?":
     "A `UserController` that validates input, calls the DB directly (`userRepo.save`), sends a welcome email, builds a PDF invoice, and formats the JSON response. Six reasons to change.\n\nFix: controller only does HTTP binding + response; validation → `@Valid`; persistence → `UserService`; email → `EmailService`; PDF → `InvoiceService`. Each class has one reason to change — one axis of modification.",
 
   // ===================== Q34: design patterns =====================
@@ -378,4 +379,5 @@ export const followupAnswers: Record<string, string> = {
   ...followupAnswersSpringCore,
   ...followupAnswersSpringBoot,
   ...followupAnswersSecurity,
+  ...followupAnswersMicroservices,
 };

@@ -4,7 +4,7 @@
  * objects at runtime without touching questions.ts.
  *
  * Style (per answer_rules.md):
- *  - 2-5 sentences, prose, no bullets/headers
+ *  - Length follows the question — no sentence quota, no padding
  *  - Bold the terms that actually matter
  *  - No GPT fluff, no "In conclusion", active voice, contractions
  *  - BAD/GOOD code only where it proves understanding
@@ -37,11 +37,11 @@ export const followupAnswersSpring: Record<string, string> = {
   "How do you bind multiple query params into an object?":
     "Declare a POJO and Spring binds matching query params to its fields automatically — `record FilterParams(String status, Integer page, Integer size) {}` and `getList(FilterParams filter)` pulls `?status=ACTIVE&page=0` into the object with no annotation needed. This is **command-object binding**, the same mechanism that backs form submissions. For nested or complex binding you add `@ModelAttribute`, and for validation you annotate fields and add `@Valid`. It keeps the controller signature clean when you've got 5+ query params instead of a 5-argument method.",
 
-  "What happens with encoded path segments (e.g., spaces, slashes)?":
+  "What happens when a path variable contains an encoded slash or space?":
     "`@PathVariable` is **automatically URL-decoded** by Spring, so `/users/John%20Doe` arrives as `\"John Doe\"`. The trap is **encoded slashes** (`%2F`) — many containers (Tomcat) reject them by default for security, and a real `/` in a path variable breaks the URL pattern match entirely. For free-text values, prefer `@RequestParam` over `@PathVariable` so slashes and special characters don't corrupt the route. If you must put messy values in the path, configure the container to allow encoded slashes and document it, because it'll bite you in production otherwise.",
 
   // ===================== Q72: @RequestBody / @ResponseBody =====================
-  "Which HttpMessageConverter handles JSON by default (Jackson)?":
+  "Which `HttpMessageConverter` handles JSON by default?":
     "**`MappingJackson2HttpMessageConverter`** — Spring Boot auto-configures it because Jackson is on the classpath, and it converts between Java objects and JSON for both `@RequestBody` (deserialize) and `@ResponseBody` (serialize). You customize it by registering an `ObjectMapper` bean — that's how you set `SnakeCase` naming, `JavaTimeModule` for `LocalDateTime`, or `FAIL_ON_UNKNOWN_PROPERTIES = false`. If Jackson isn't on the classpath and you return an object, Spring has no converter and you get a **415/500** depending on the direction. For XML you'd add Jackson XML or JAXB and the converter picks based on `Content-Type`.",
 
   "How does `@RestController` relate to `@ResponseBody`?":
@@ -51,7 +51,7 @@ export const followupAnswersSpring: Record<string, string> = {
     "If the JSON is malformed or doesn't match the target type, Jackson throws **`HttpMessageNotReadableException`**, which Spring translates into a **400 Bad Request** by default — the controller method never runs. The common gotcha: the **exception message leaks details** (unknown property, type mismatch), so in production you catch it in `@ControllerAdvice` and return a generic error. Also watch `@Valid` — a *syntactically valid* JSON that violates a bean constraint throws `MethodArgumentNotValidException`, a different 400 path. Both need handling if your API should return clean errors.",
 
   // ===================== Q73: @Valid / @Validated =====================
-  "What is the difference between `@Valid` and `@Validated` (groups)?":
+  "What is the difference between `@Valid` and `@Validated`?":
     "`@Valid` is the **Bean Validation** annotation (JSR-380) that triggers validation of a `@RequestBody` DTO, cascading into nested objects — it validates **everything**. `@Validated` is Spring's extension: it adds **validation groups** so the same DTO can be validated differently per context (`@Validated(OnCreate.class)` vs `@Validated(OnUpdate.class)`), and it also works on **method-level** parameters (not just DTOs). Use `@Valid` for the common case; reach for `@Validated` only when you genuinely need partial validation, like \"id must be null on create but required on update.\"",
 
   "Where do you put constraint annotations — DTO fields or custom validators?":
@@ -87,8 +87,8 @@ export const followupAnswersSpring: Record<string, string> = {
   "When is returning a DTO directly (with `@RestController`) enough?":
     "When the response is always **200 OK** with no custom headers and a straightforward body — `return userService.findById(id)` is clean and readable. Reach for `ResponseEntity` the moment you need a non-200 status, headers (`Location`, `ETag`, pagination), or conditional behavior (204 No Content when the body is empty). Don't wrap every return in `ResponseEntity` just for consistency if the simple case doesn't need it — it's ceremony with no payoff. The line is: custom status/headers → ResponseEntity; plain success body → return the DTO.",
 
-  "How do you build a ResponseEntity with the builder API?":
-    "Static factory + fluent chain: `ResponseEntity.status(409).header(\"X-Reason\", \"duplicate\").body(error)`, or the shortcuts `ResponseEntity.ok(body)`, `ResponseEntity.noContent().build()`, `ResponseEntity.created(location).build()`. `.build()` skips the body for responses like 204. The builder pattern is preferable to `new ResponseEntity<>(body, headers, status)` because it reads top-down and lets you omit any leg you don't need. Pick the static helper that matches your intent (`.ok`, `.created`, `.noContent`) for the common cases.",
+  "How do you return a file download with `ResponseEntity`?":
+    "Return a **`ResponseEntity<Resource>`** and set two headers: `Content-Type` (via `.contentType(MediaType.APPLICATION_PDF)` or `APPLICATION_OCTET_STREAM` when you don't know) and **`Content-Disposition: attachment; filename=\"invoice.pdf\"`**, which is what makes the browser download rather than render it. Add `.contentLength(...)` when you know the size so the client can show a progress bar.\n\nThe part that matters in production is **not loading the file into memory**. A `ByteArrayResource` reads the whole thing onto the heap, so a few concurrent downloads of a 200MB export will OOM the pod. Use an `InputStreamResource` over the file or S3 stream, or a `StreamingResponseBody`, so bytes flow straight to the socket.\n\nAlso sanitise the filename if any part of it comes from user input — a newline or quote in a `Content-Disposition` header is a header-injection bug.",
 
   // ===================== Q77: API versioning =====================
   "Compare URI versioning (`/v1/users`) vs header versioning.":
@@ -104,8 +104,8 @@ export const followupAnswersSpring: Record<string, string> = {
   "What does \"hypermedia as the engine of application state\" mean in practice?":
     "It means the response doesn't just give you data — it gives you **links** telling the client what it can do next: a `GET /orders/42` response includes `_links` like `cancel`, `payment`, `self`, so the client navigates by following links rather than hard-coding URLs. The \"engine\" part is that the server drives state transitions by advertising available actions; the client doesn't need to know the URL scheme. In practice few APIs fully embrace it because it adds payload overhead and complexity, and most clients just hard-code the URLs anyway.",
 
-  "Have you used Spring HATEOAS? When is it worth the complexity?":
-    "Spring HATEOAS gives you `EntityModel`, `CollectionModel`, and `WebMvcLinkBuilder` to attach `_links` to responses with type-safe link building like `linkTo(methodOn(OrderController.class).cancel(id)).withRel(\"cancel\")`. It's worth it when you have a genuinely stateful, navigable API or external clients who benefit from discoverability. For internal microservices where the same team owns client and server, the boilerplate usually isn't justified — hand-coded links or none at all are simpler. It shines in public APIs that want to evolve URL schemes without breaking hardcoded clients.",
+  "When is HATEOAS worth the extra complexity?":
+    "Rarely, and the test is who owns the client. It pays off for a **public API you want to evolve** — clients follow `_links` instead of hardcoding URL patterns, so you can move an endpoint without breaking them — and for genuinely stateful resources where the available transitions change with state, like which actions an order allows once it's shipped. For internal microservices where the same team owns both sides, it doesn't pay: you're adding a wrapper type and link-building code to every response so a client can read a URL it could have constructed. Mechanically it's `EntityModel`, `CollectionModel`, and `WebMvcLinkBuilder` — `linkTo(methodOn(OrderController.class).cancel(id)).withRel(\"cancel\")` — which is type-safe, but still boilerplate on every endpoint.",
 
   "How do links in responses help API discoverability?":
     "Links let a client **explore** the API from a single entry point without out-of-band URL knowledge — start at `/`, follow `users`, then `create`, then `orders`, the way a browser navigates a website. It decouples the client from specific URLs, so the server can rename or restructure routes and clients that follow links keep working. Discoverability also makes onboarding easier: hit one URL, read the links, and you know what's possible. The cost is a heavier response payload and clients that actually have to honor the links instead of hard-coding them.",
@@ -117,7 +117,7 @@ export const followupAnswersSpring: Record<string, string> = {
   "How do `@CrossOrigin`, global CORS config, and Security CORS differ?":
     "`@CrossOrigin(origins = \"https://app.com\")` enables CORS **per controller/method** — fine for a single endpoint. Global config via `WebMvcConfigurer.addCorsMappings(...)` sets it **app-wide** without touching controllers. The trap: if **Spring Security** is on the classpath, it owns the filter chain and **overrides** the MVC CORS config — you must configure CORS inside `SecurityFilterChain` with `http.cors(Customizer.withDefaults())` wired to a `CorsConfigurationSource` bean. Forgetting that is why CORS \"works in dev, breaks in prod\" the moment you add security.",
 
-  "What headers matter for CORS (`Origin`, `Access-Control-Allow-*`)?":
+  "Which headers actually drive the browser's CORS decision?":
     "The browser sends **`Origin`** on cross-origin requests; the server replies with **`Access-Control-Allow-Origin`** (the allowed origin or `*`), **`Access-Control-Allow-Methods`**, **`Access-Control-Allow-Headers`** (which request headers are permitted), and for credentialed requests **`Access-Control-Allow-Credentials: true`** plus a specific origin (never `*`). Preflight responses also include `Access-Control-Max-Age` to cache the preflight. Mismatch any of these — say, you allow `*` but the client sends credentials — and the browser blocks the response even though the server returned 200.",
 
   // ===================== Q80: Content negotiation =====================
@@ -154,7 +154,7 @@ export const followupAnswersSpring: Record<string, string> = {
   "How does Spring Data's `Pageable` integrate with controllers?":
     "Declare `Pageable pageable` as a controller method parameter and Spring binds `?page=0&size=20&sort=createdAt,desc` into it automatically — no parsing. Pass that `Pageable` straight to `repository.findAll(pageable)` and you get a `Page<T>` back with content, total elements, and page metadata. You can also constrain it with `@PageableDefault(size = 50, sort = \"id\")` so missing params get sane defaults. The win is you write almost no boilerplate for pagination — the framework handles query params, DB query, and counting.",
 
-  "What should a paginated response include (content, total, page, size)?":
+  "What should a paginated response body include?":
     "At minimum: the **content** array for the current page, **totalElements** (so clients can compute total pages), the current **page** number and **size**, and ideally **totalPages** plus **`first`/`last`** flags and navigation links. Without `totalElements`, clients can't render \"page 3 of 12\" or know whether to show a Next button. Spring Data's `Page<T>` serializes all of this by default; if you hand-roll a wrapper, don't drop the total or you'll strand the UI unable to paginate. Include the sort info too if your client can re-sort.",
 
   "How do you prevent expensive unbounded list endpoints?":
