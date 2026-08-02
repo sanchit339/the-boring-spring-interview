@@ -31,6 +31,7 @@ content file** and **a set of answer-bank files**; everything else is layout.
 | `src/data/followup_answers_spring_boot.ts` | Bank — `spring-boot` (Q53–Q68) |
 | `src/data/followup_answers_spring.ts` | Bank — `spring-mvc-rest` (Q69–Q83). Note the misleading name. |
 | `src/data/followup_answers_jpa.ts` | Bank — `spring-data-jpa` (Q84–Q102) |
+| `src/data/followup_answers_security.ts` | Bank — `security` (Q103–Q112) |
 | `src/data/types.ts` | `Category`, `Question`, `FollowUp` interfaces |
 | `src/components/QuestionCard.astro` | Renders a question. Contains the markdown renderer — see §5. |
 
@@ -147,7 +148,7 @@ Bank files are `.ts`, and the strings are double-quoted, so:
 
 ## 6. Current coverage
 
-158 questions, 474 follow-ups, **306 answered / 168 missing** (as of last edit).
+158 questions, 474 follow-ups, **336 answered / 138 missing** (as of last edit).
 
 | Category | Range | Qs | main answer | explanation | follow-up answers |
 |---|---|---|---|---|---|
@@ -157,7 +158,7 @@ Bank files are `.ts`, and the strings are double-quoted, so:
 | `spring-boot` | Q53–Q68 | 16 | 16/16 | 16/16 | 48/48 |
 | `spring-mvc-rest` | Q69–Q83 | 15 | 15/15 | 15/15 | 45/45 |
 | `spring-data-jpa` | Q84–Q102 | 19 | 19/19 | 19/19 | 57/57 |
-| `security` | Q103–Q112 | 10 | **0/10** | **0/10** | **0/30** |
+| `security` | Q103–Q112 | 10 | 10/10 | 10/10 | 30/30 |
 | `microservices` | Q113–Q124 | 12 | **0/12** | **0/12** | **0/36** |
 | `testing` | Q125–Q132 | 8 | **0/8** | **0/8** | **0/24** |
 | `build-git` | Q133–Q142 | 10 | **0/10** | **0/10** | **0/30** |
@@ -181,7 +182,7 @@ needed rewriting. **Check that a stranded answer still answers the current
 question before re-keying it** — an orphan can mean either drift or replacement,
 and only the verification script tells you it exists at all.
 
-Six categories have **nothing at all** — each needs a new bank file per §4.
+Five categories have **nothing at all** — each needs a new bank file per §4.
 
 ---
 

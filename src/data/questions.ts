@@ -4455,33 +4455,151 @@ SELECT u.name, o.total FROM users u, orders o;
       {
         id: 103,
         text: "What is Spring Security, and what problem does it solve?",
+        answer: "Spring Security is a **filter-based** framework that handles **authentication** (who are you) and **authorization** (what may you do) before a request ever reaches your controller. It also ships the hardening you'd otherwise hand-roll — password hashing, CSRF tokens, session fixation protection, and security response headers. Add `spring-boot-starter-security` and **every endpoint is locked down by default**; you then open up exactly what should be public. Skip it and you scatter `if (user == null) return 401` checks across every controller — and the one you forget is the breach.",
+        explanation: `**Analogy:** a building's security desk. Everyone entering passes one lobby — badge checked once, at the door. You don't post a guard inside every meeting room, and no room can forget to have one.
+
+\`\`\`java
+// BAD — security scattered through controllers
+@RestController
+class OrderController {
+    @GetMapping("/api/orders/{id}")
+    public OrderDto get(@PathVariable Long id, HttpSession session) {
+        User user = (User) session.getAttribute("user");
+        if (user == null) throw new ResponseStatusException(UNAUTHORIZED);  // repeated in 40 methods
+        if (!user.isAdmin()) throw new ResponseStatusException(FORBIDDEN);  // forget once = data leak
+        return orderService.find(id);
+    }
+}
+\`\`\`
+
+\`\`\`java
+// GOOD — one place declares the rules; filters enforce them before the controller runs
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+    @Bean
+    SecurityFilterChain chain(HttpSecurity http) throws Exception {
+        return http
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/orders/**").hasRole("ADMIN")
+                .anyRequest().authenticated())   // default-deny
+            .build();
+    }
+}
+\`\`\`
+
+The controller is now pure business logic — it never sees an unauthenticated request, because the filter chain runs **before \`DispatcherServlet\`** and short-circuits with a 401.
+
+\`anyRequest().authenticated()\` is the line that matters most: it makes the default **deny**, so an endpoint someone adds next sprint is protected before anyone remembers to protect it. The opposite ordering — listing what to secure and leaving the rest open — is how endpoints leak.`,
         followUps: [
           { text: "What is the security filter chain at a high level?" },
-          { text: "How does Spring Security integrate with servlet filters?" },
+          { text: "How does Spring Security run inside a servlet container that knows nothing about Spring beans?" },
           { text: "What defaults does Spring Security enable out of the box?" },
         ],
       },
       {
         id: 104,
         text: "What is the difference between authentication and authorization?",
+        answer: "**Authentication** answers *who are you* — it verifies credentials and stores an `Authentication` object in the `SecurityContext`. **Authorization** answers *what are you allowed to do* — it checks that principal's authorities against the rule for this URL or method. Authentication always runs first; authorization is meaningless without it. The status codes tell them apart: **401 means we don't know who you are, 403 means we know and you still can't have it** — returning 403 for an expired token sends clients chasing the wrong bug.",
+        explanation: `**Analogy:** an airport. Authentication is the passport check at the gate — proving you're you. Authorization is the lounge door — you're definitely you, and you're still not getting in on an economy ticket.
+
+\`\`\`java
+// Authentication happens in a filter: credentials -> Authentication -> SecurityContext
+UsernamePasswordAuthenticationToken auth =
+    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+SecurityContextHolder.getContext().setAuthentication(auth);
+// From here on, "who" is settled. Everything downstream only asks "may they?"
+\`\`\`
+
+\`\`\`java
+// Authorization happens twice: URL-level in the chain, method-level on the bean
+http.authorizeHttpRequests(a -> a
+    .requestMatchers("/api/admin/**").hasRole("ADMIN")   // 403 for a logged-in USER
+    .anyRequest().authenticated());                      // 401 for no token at all
+
+@PreAuthorize("hasRole('ADMIN') or #userId == authentication.name")
+public UserDto getProfile(String userId) { ... }        // 403 if the SpEL is false
+\`\`\`
+
+Spring routes the two failures to different components: \`AuthenticationEntryPoint\` handles "not authenticated" (401), \`AccessDeniedHandler\` handles "authenticated but denied" (403). On a JSON API you override both, or an expired token gets a **302 redirect to /login** and your mobile client parses an HTML page as JSON.`,
         followUps: [
           { text: "Where does each happen in a typical request to a secured API?" },
-          { text: "What is a principal and authorities/roles?" },
+          { text: "What exactly does the `Authentication` object hold after a successful login?" },
           { text: "Can you be authenticated but not authorized? Give an example." },
         ],
       },
       {
         id: 105,
         text: "How does JWT-based authentication work in a Spring Boot application?",
+        answer: "The client logs in once, the server **signs** a JWT holding the user id, roles, and an expiry, and hands it back. Every later request sends it as `Authorization: Bearer <token>`; a custom filter parses it, **verifies the signature and expiry**, and populates the `SecurityContext` — no server-side session, so any instance can serve any request. The token is **signed, not encrypted**: anyone can base64-decode the claims, so never put a password or PII in it. The real cost is revocation — you can't un-issue a token, so keep the access token short (5–15 minutes) and pair it with a revocable refresh token.",
+        explanation: `**Analogy:** a festival wristband. The gate checks your ID once and gives you a tamper-proof band. Every stage after that just looks at the band — nobody phones the gate. Which is also the problem: kick someone out and the band still works until it expires.
+
+\`\`\`java
+// The filter that runs on every request, once, before the controller
+public class JwtAuthFilter extends OncePerRequestFilter {
+    protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
+            throws ServletException, IOException {
+        String header = req.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            try {
+                Claims claims = jwtService.parseAndVerify(header.substring(7)); // throws if signature/exp bad
+                var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + claims.get("role")));
+                var auth = new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities);
+                SecurityContextHolder.getContext().setAuthentication(auth);
+            } catch (JwtException e) {
+                SecurityContextHolder.clearContext();   // bad token = anonymous, NOT an exception page
+            }
+        }
+        chain.doFilter(req, res);   // must always continue, or the response never completes
+    }
+}
+\`\`\`
+
+\`\`\`java
+// Wire it in: stateless session + the filter placed before form-login's filter
+@Bean
+SecurityFilterChain chain(HttpSecurity http, JwtAuthFilter jwt) throws Exception {
+    return http
+        .csrf(csrf -> csrf.disable())                                     // no cookies = no CSRF vector
+        .sessionManagement(s -> s.sessionCreationPolicy(STATELESS))       // don't create JSESSIONID
+        .authorizeHttpRequests(a -> a
+            .requestMatchers("/api/auth/**").permitAll()
+            .anyRequest().authenticated())
+        .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)
+        .build();
+}
+\`\`\`
+
+Two traps bite people in production. Forget \`STATELESS\` and Spring still creates a session per request — memory grows and you've lost the statelessness you paid for. And **verify the algorithm**, don't just decode: a library that accepts \`alg: none\` or lets the token choose HMAC vs RSA lets an attacker forge any claim they like. Use a vetted library (\`jjwt\`, Nimbus) and a key of at least 256 bits.`,
         followUps: [
-          { text: "What are the parts of a JWT (header, payload, signature)?" },
-          { text: "Where should tokens be stored on the client, and what are XSS/CSRF concerns?" },
+          { text: "What stops a client from editing the claims in its own JWT?" },
+          { text: "Where should the token live on the client, and what attack does each choice expose you to?" },
           { text: "How do you handle token refresh and expiration?" },
         ],
       },
       {
         id: 106,
         text: "What is the difference between session-based and token-based authentication?",
+        answer: "**Session-based**: the server keeps the state and hands the client an opaque `JSESSIONID` cookie; every request looks that session up in server memory or Redis. **Token-based**: the server keeps nothing — the signed token itself carries the identity and the server just verifies the signature. Sessions are **instantly revocable** (delete the row) but need sticky sessions or a shared store to scale out; tokens **scale for free** but stay valid until they expire. Cookies are sent automatically by the browser, which is exactly why sessions need CSRF protection and an `Authorization` header doesn't.",
+        explanation: `**Analogy:** a coat check versus a wristband. The coat check keeps a numbered stub — you hand over a meaningless ticket and the desk looks up what it means. The wristband carries the information on it; nobody looks anything up, and nobody can take it back either.
+
+\`\`\`java
+// Session — the cookie is a lookup key; the real data lives server-side
+// Cookie: JSESSIONID=9F2A...   (opaque, meaningless to the client)
+// Server: sessionStore.get("9F2A...") -> { userId: 42, roles: [ADMIN], cart: [...] }
+// Revoke = session.invalidate();          // effective on the very next request
+// Scale out = sticky sessions at the LB, or spring-session-data-redis
+
+// Token — the cookie/header IS the data, signed so it can't be edited
+// Authorization: Bearer eyJhbGci...   (base64 claims: sub=42, role=ADMIN, exp=...)
+// Revoke = you can't, short of a denylist that re-introduces the state you removed
+// Scale out = nothing to do; any instance verifies with the same key
+\`\`\`
+
+Use **sessions** for a server-rendered app or a first-party web app where instant logout and "log out all devices" matter — with \`spring-session-data-redis\` the scaling objection mostly disappears. Use **tokens** for mobile clients, public APIs, and service-to-service calls where there's no cookie jar and you need cross-domain calls.
+
+The honest middle ground most teams land on: short-lived JWT access tokens plus a **refresh token stored server-side**. Revocation happens at refresh time, so the blast radius of a stolen token is one token lifetime instead of forever. Anyone who tells you JWTs are strictly better than sessions is skipping the revocation conversation.`,
         followUps: [
           { text: "Why are token-based approaches often preferred for stateless REST APIs?" },
           { text: "How does horizontal scaling differ for sticky sessions vs JWT?" },
@@ -4491,15 +4609,94 @@ SELECT u.name, o.total FROM users u, orders o;
       {
         id: 107,
         text: "How do you secure REST APIs using Spring Security?",
+        answer: "Declare one `SecurityFilterChain` bean that turns the API **stateless** (`SessionCreationPolicy.STATELESS`), disables form login and CSRF because there's no cookie or login page, plugs in a **JWT or OAuth2 resource-server filter**, and ends the matcher list with `anyRequest().authenticated()`. Add `@EnableMethodSecurity` and `@PreAuthorize` for rules that depend on the data, not just the URL. Override the `AuthenticationEntryPoint` so failures return **JSON 401**, not a redirect to `/login`. The rule that saves you: order matchers most-specific-first and make the last one deny — new endpoints are then secure by default.",
+        explanation: `\`\`\`java
+// BAD — the mistakes that make an "API" behave like a web app
+http.authorizeHttpRequests(a -> a
+        .anyRequest().permitAll()              // catch-all FIRST: every rule below is dead code
+        .requestMatchers("/api/admin/**").hasRole("ADMIN"))
+    .formLogin(withDefaults());                // 302 -> /login; your mobile client sees HTML
+// plus a session per request, since STATELESS was never set
+\`\`\`
+
+\`\`\`java
+// GOOD — stateless, JSON errors, default-deny
+@Bean
+SecurityFilterChain api(HttpSecurity http, JwtAuthFilter jwt) throws Exception {
+    return http
+        .csrf(csrf -> csrf.disable())
+        .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .formLogin(AbstractHttpConfigurer::disable)
+        .httpBasic(AbstractHttpConfigurer::disable)
+        .authorizeHttpRequests(a -> a
+            .requestMatchers("/api/auth/**", "/actuator/health").permitAll()
+            .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()  // method-specific
+            .requestMatchers("/api/admin/**").hasRole("ADMIN")
+            .anyRequest().authenticated())                                    // last, and denying
+        .exceptionHandling(e -> e
+            .authenticationEntryPoint((req, res, ex) -> {                     // 401 as JSON
+                res.setStatus(401);
+                res.setContentType("application/json");
+                res.getWriter().write("{\\"error\\":\\"unauthorized\\"}");
+            }))
+        .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)
+        .build();
+}
+\`\`\`
+
+**Matcher order is evaluated top-down and the first match wins** — a stray \`permitAll()\` near the top silently opens everything below it, and no test that only checks happy paths will catch it. Write a \`MockMvc\` test that hits each protected endpoint **with no token** and asserts 401; that's the test that catches a bad reorder during review.
+
+Also secure the actuator explicitly. \`/actuator/health\` is fine to expose, but \`/actuator/env\` and \`/actuator/heapdump\` leak credentials and memory contents — keep them behind \`hasRole("ADMIN")\` or off the public port entirely.`,
         followUps: [
           { text: "How do you permit public endpoints like `/login` and `/actuator/health`?" },
-          { text: "How do you disable form login and use a JWT filter instead?" },
+          { text: "What breaks if you add a JWT filter but leave form login and sessions enabled?" },
           { text: "How do you return 401 JSON instead of redirecting to a login page?" },
         ],
       },
       {
         id: 108,
         text: "What is `SecurityFilterChain`, and how do you configure it?",
+        answer: "`SecurityFilterChain` is a **bean** that pairs a request matcher with an ordered list of security filters — since Spring Security 5.7 it's how you configure security, replacing the deprecated `WebSecurityConfigurerAdapter`. You build one by taking `HttpSecurity` as a method parameter, chaining the DSL, and returning `http.build()`. You can register **several** chains: `securityMatcher` decides which requests each one claims, and **the first chain whose matcher hits handles the request — the rest are skipped entirely**. Get the `@Order` wrong and a broad chain swallows requests you meant a narrower one to protect.",
+        explanation: `\`\`\`java
+// The old way — deprecated in 5.7, removed in 6.0. Don't write this.
+@Configuration
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+    @Override protected void configure(HttpSecurity http) { ... }  // inheritance = one config, hard to compose
+}
+\`\`\`
+
+\`\`\`java
+// Two chains: the API is stateless + JWT, the admin UI keeps sessions + form login
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    @Order(1)                                              // most specific FIRST
+    SecurityFilterChain apiChain(HttpSecurity http, JwtAuthFilter jwt) throws Exception {
+        return http
+            .securityMatcher("/api/**")                    // this chain only claims /api/**
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(a -> a.anyRequest().authenticated())
+            .addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)
+            .build();
+    }
+
+    @Bean
+    @Order(2)                                              // catch-all LAST
+    SecurityFilterChain webChain(HttpSecurity http) throws Exception {
+        return http
+            .authorizeHttpRequests(a -> a.anyRequest().hasRole("ADMIN"))
+            .formLogin(withDefaults())                     // CSRF stays ON here — cookies are in play
+            .build();
+    }
+}
+\`\`\`
+
+Swap those \`@Order\` values and the catch-all chain matches \`/api/**\` first — your JWT filter never runs and API clients get redirected to a login form. There's no warning; the app starts fine.
+
+Placement inside a chain matters too. \`addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)\` puts your filter after the exception-translation and context-persistence filters but **before** authorization runs, which is the only window where setting the \`SecurityContext\` still counts. Put it after \`FilterSecurityInterceptor\` and every request is denied before your filter ever executes. Set \`logging.level.org.springframework.security=DEBUG\` and Boot prints the resolved chain and every filter in order at startup — that's the fastest way to see which chain actually claimed a request when the behaviour doesn't match the config you think you wrote.`,
         followUps: [
           { text: "Why did Spring Security move away from `WebSecurityConfigurerAdapter`?" },
           { text: "How do you define multiple filter chains for different path patterns?" },
@@ -4509,33 +4706,164 @@ SELECT u.name, o.total FROM users u, orders o;
       {
         id: 109,
         text: "What is CSRF, and how does Spring Security handle it?",
+        answer: "**Cross-Site Request Forgery** is an attack where a malicious page makes the victim's browser fire a state-changing request at your site — and because **cookies are attached automatically**, it arrives fully authenticated. Spring Security defends with the **synchronizer token pattern**: it puts a random token in the session, requires it on every `POST`/`PUT`/`DELETE`, and rejects the request with 403 if it's missing or wrong. The attacker's page can make the browser send the request but **can't read your token** — the same-origin policy stops it. CSRF is enabled by default, and you only turn it off when authentication rides in a header instead of a cookie.",
+        explanation: `**Analogy:** someone forges a cheque in your name and the bank cashes it because the signature is real. Your browser is the signature — it attaches the cookie to every request to that domain, no matter who triggered it.
+
+\`\`\`xml
+<!-- The attack. Victim is logged into your bank in another tab and visits evil.com -->
+<form action="https://yourbank.com/transfer" method="POST">
+  <input type="hidden" name="to" value="attacker" />
+  <input type="hidden" name="amount" value="5000" />
+</form>
+<script>document.forms[0].submit();</script>
+<!-- Browser attaches JSESSIONID automatically -> server sees a valid, authenticated transfer -->
+\`\`\`
+
+\`\`\`java
+// The defence, and when to switch it off
+
+// Cookie-session web app: leave CSRF ON (default). Thymeleaf injects the hidden
+// _csrf field into every <form> automatically; a request without it gets 403.
+
+// Stateless JWT API: no cookie is used for auth, so there's nothing to forge
+http.csrf(AbstractHttpConfigurer::disable);
+
+// SPA on a different origin that DOES use a cookie: keep it on, expose the token to JS
+http.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()));
+\`\`\`
+
+The decision rule is one question: **does the browser attach your credential automatically?** Cookie or HTTP Basic — yes, so you need CSRF protection. A JWT the client reads from storage and puts in an \`Authorization\` header — no, the attacker's page can't add that header, so CSRF adds nothing.
+
+Where teams get burned: they read "JWTs don't need CSRF", disable it, then later store the JWT in a cookie for convenience. The protection is off and the vector is back. If your token lives in a cookie, you need CSRF protection **or** \`SameSite=Strict\`, regardless of what the token contains.`,
         followUps: [
           { text: "Why is CSRF often disabled for pure stateless JWT APIs?" },
-          { text: "When must CSRF protection stay enabled (cookie-based sessions)?" },
+          { text: "When would disabling CSRF actually get your app exploited?" },
           { text: "How does the synchronizer token pattern work?" },
         ],
       },
       {
         id: 110,
         text: "What is role-based access control, and how do you implement it (`@PreAuthorize`, `@Secured`)?",
+        answer: "RBAC means permissions attach to **roles**, not to individual users — you grant `ROLE_ADMIN` once and every admin inherits it. In Spring you enforce it at the URL level with `hasRole(\"ADMIN\")` in the filter chain, and at the method level with **`@PreAuthorize`**, which takes a **SpEL expression** and can see the method's arguments. `@Secured` is the older annotation and only accepts a plain list of role names — no expressions — so `@PreAuthorize` is the one to use. Method security needs **`@EnableMethodSecurity`**; without it the annotations are silently ignored and every call goes through.",
+        explanation: `\`\`\`java
+// URL-level RBAC catches the coarse case, but it can't see the data
+http.authorizeHttpRequests(a -> a
+    .requestMatchers("/api/admin/**").hasRole("ADMIN")       // "ROLE_" prefix added for you
+    .requestMatchers("/api/reports/**").hasAuthority("report:read"));  // no prefix added here
+
+// GET /api/orders/99 passes this check for ANY authenticated user — including
+// the one whose order it isn't. That's a broken-object-level-authorization bug (OWASP #1).
+\`\`\`
+
+\`\`\`java
+@Configuration
+@EnableMethodSecurity          // WITHOUT this line every annotation below is a no-op
+public class MethodSecurityConfig { }
+
+@Service
+public class OrderService {
+
+    @PreAuthorize("hasRole('ADMIN')")                      // runs BEFORE the method body
+    public void deleteOrder(Long id) { ... }
+
+    // SpEL sees the arguments and the authenticated principal — this is the ownership check
+    @PreAuthorize("hasRole('ADMIN') or #customerId == authentication.name")
+    public List<OrderDto> ordersFor(String customerId) { ... }
+
+    // When ownership is only knowable AFTER loading, filter the return value instead
+    @PostAuthorize("returnObject.customerId == authentication.name")
+    public OrderDto findById(Long id) { ... }
+}
+\`\`\`
+
+Two things trip people up. **The \`ROLE_\` prefix is inconsistent**: \`hasRole("ADMIN")\` prepends \`ROLE_\` for you, \`hasAuthority("ADMIN")\` does not — so if your DB stores \`ADMIN\` without the prefix, \`hasRole\` fails and \`hasAuthority\` works, and vice versa. Pick one convention and store authorities to match it.
+
+And method security runs through **Spring AOP proxies**, so it only fires on calls that cross the proxy boundary. A \`@PreAuthorize\` method invoked from another method of the *same* bean is called directly on \`this\` — the annotation is bypassed entirely. Same self-invocation limitation as \`@Transactional\`, same fix: call it from a different bean.`,
         followUps: [
           { text: "What is the difference between roles and authorities in Spring Security?" },
-          { text: "How do you enable method security (`@EnableMethodSecurity`)?" },
-          { text: "When would you use SpEL in `@PreAuthorize` for object-level checks?" },
+          { text: "Why does `@PreAuthorize` silently do nothing on a fresh Boot app?" },
+          { text: "How do you check that a user owns the specific record they're requesting?" },
         ],
       },
       {
         id: 111,
         text: "How do you store passwords securely (`PasswordEncoder`, BCrypt)?",
+        answer: "You **hash** passwords, never encrypt them — encryption is reversible and a leaked key hands over every account. Use Spring's `PasswordEncoder` with **BCrypt** (or Argon2/scrypt), which is deliberately **slow** and generates a **random salt per password** that it stores inside the hash string itself. Verification never decrypts anything: `encoder.matches(rawPassword, storedHash)` re-hashes the input with the stored salt and compares. The work factor is the point — a fast hash like MD5 or SHA-256 lets an attacker try billions of guesses a second against a stolen dump.",
+        explanation: `**Analogy:** a hash is a paper shredder, not a safe. A safe can be opened with the key; shredded paper can only be compared against another shred of the same document. Salting means every document goes through a differently-configured shredder, so identical passwords don't produce identical shreds.
+
+\`\`\`java
+// BAD — each of these is a real incident waiting to happen
+user.setPassword(rawPassword);                            // plain text: dump = game over
+user.setPassword(DigestUtils.md5Hex(rawPassword));        // unsalted + fast: rainbow tables
+user.setPassword(aesEncrypt(rawPassword, secretKey));     // reversible: leak the key, leak everything
+// Unsalted also means two users with the same password get the same hash —
+// crack one row and you've cracked every account that shares it.
+\`\`\`
+
+\`\`\`java
+@Bean
+PasswordEncoder passwordEncoder() {
+    return PasswordEncoderFactories.createDelegatingPasswordEncoder();  // BCrypt by default
+}
+
+// Registration — hash once, store the result
+user.setPassword(passwordEncoder.encode(dto.getRawPassword()));
+// stored: {bcrypt}$2a$10$N9qo8uLOickgx2ZMRZoMye...
+//          ^prefix   ^cost ^22-char salt + hash — the salt travels WITH the hash
+
+// Login — never decrypt, never compare strings directly
+if (!passwordEncoder.matches(dto.getRawPassword(), user.getPassword())) {
+    throw new BadCredentialsException("Invalid credentials");  // same message for bad user AND bad password
+}
+\`\`\`
+
+That \`{bcrypt}\` prefix is what makes **\`DelegatingPasswordEncoder\`** the right default: the stored hash declares its own algorithm, so old \`{md5}\` rows still verify while new ones are written with BCrypt. Re-encode a user's password on their next successful login and the whole table migrates itself, no forced reset.
+
+Two production details. Keep the BCrypt strength at **10–12** — higher is safer but each step doubles login CPU cost, and a strength of 15 will melt your login endpoint under load. And return an **identical error message and similar response time** for "unknown user" and "wrong password"; leaking which one failed turns your login form into a tool for enumerating who has an account.`,
         followUps: [
           { text: "Why should you never store plain-text or reversible encrypted passwords?" },
-          { text: "What is salting, and does BCrypt handle it?" },
-          { text: "How do you migrate from one encoder to another with `DelegatingPasswordEncoder`?" },
+          { text: "Where does the salt live if the database column only stores one hash string?" },
+          { text: "How do you switch hashing algorithms without forcing every user to reset their password?" },
         ],
       },
       {
         id: 112,
         text: "What is OAuth2, and how does Spring Boot integrate with it?",
+        answer: "OAuth2 is a **delegated authorization** protocol: it lets an app act on a user's behalf against another service **without ever seeing their password**. The user authenticates at the authorization server (Google, Okta, Keycloak), which issues a scoped **access token** the app presents to the resource server. OAuth2 is about *authorization* — **OpenID Connect** is the thin layer on top that adds an `id_token` and makes it usable for *login*. In Spring Boot you don't implement any of it: add `spring-boot-starter-oauth2-client` to be the app logging users in, or `spring-boot-starter-oauth2-resource-server` to be the API validating incoming tokens.",
+        explanation: `**Analogy:** a hotel key card. You prove who you are once at reception, and they hand you a card that opens your room and the gym — for three nights. The gym door never learns your name or your credit card; it just checks the card. Reception can cancel it without changing every lock.
+
+\`\`\`yaml
+# Your API as a RESOURCE SERVER — validate tokens someone else issued.
+# Boot fetches the public keys from the issuer and verifies every JWT signature for you.
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://auth.company.com/realms/orders
+\`\`\`
+
+\`\`\`java
+// That's it — no filter to write. Map the token's scopes to your rules:
+@Bean
+SecurityFilterChain chain(HttpSecurity http) throws Exception {
+    return http
+        .authorizeHttpRequests(a -> a
+            .requestMatchers(HttpMethod.GET, "/api/orders/**").hasAuthority("SCOPE_orders:read")
+            .requestMatchers(HttpMethod.POST, "/api/orders/**").hasAuthority("SCOPE_orders:write")
+            .anyRequest().authenticated())
+        .oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults()))
+        .build();
+}
+
+// Read claims straight off the validated token in a controller:
+@GetMapping("/me")
+public String me(@AuthenticationPrincipal Jwt jwt) { return jwt.getSubject(); }
+\`\`\`
+
+**Authorization code flow** in four steps: your app redirects the browser to the authorization server; the user logs in there and consents; the server redirects back with a short-lived **code**; your app exchanges that code for tokens over a **back-channel** HTTPS call using its client secret. The token never travels through the browser URL — that's the whole reason the code step exists. Public clients (SPAs, mobile) have no secret to protect, so they add **PKCE**; the implicit flow that used to serve them is deprecated.
+
+The distinction interviewers push on: **authorization server** issues and signs tokens and owns the login UI; **resource server** owns the data and only ever *validates* tokens. Most teams build resource servers and buy the authorization server. Writing your own is a security project, not a sprint task.`,
         followUps: [
           { text: "What is the difference between OAuth2 and OpenID Connect?" },
           { text: "Explain authorization code flow at a high level." },
