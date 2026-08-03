@@ -2023,7 +2023,7 @@ ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.cl
       {
         id: 41,
         text: "What are Spring Bean scopes (singleton, prototype, request, session)?",
-        answer: "**Singleton** is the default: one instance per container, shared by every injection point, built at startup. **Prototype** returns a new instance on every request for the bean, and Spring stops managing it after creation, so `@PreDestroy` never runs. **Request** and **session** are web scopes — one instance per HTTP request, or per user session. The trap is mixing lifetimes. Inject a request-scoped `CurrentUser` into a singleton `OrderService` and startup dies with `Scope 'request' is not active for the current thread` — no request is in flight when the singleton is built. Make the singleton lazy so it survives, and it's worse: it captures the **first** request's instance and serves it to every user afterwards. Add `proxyMode = TARGET_CLASS` so Spring injects a proxy that resolves the right instance per call.",
+        answer: "**Singleton** is the default: one instance per container, shared by every injection point, built at startup. **Prototype** returns a new instance on every request for the bean, and Spring stops managing it after creation, so `@PreDestroy` never runs. **Request** and **session** are web scopes — one instance per HTTP request, or per user session. The trap is mixing lifetimes. Inject a request-scoped `CurrentUser` into a singleton `OrderService` and startup dies with `Scope 'request' is not active for the current thread`. No request is in flight when the singleton is built. Make the singleton lazy so it survives, and it's worse: it captures the **first** request's instance and serves it to every user afterwards. Add `proxyMode = TARGET_CLASS` so Spring injects a proxy that resolves the right instance per call.",
         explanation: `\`\`\`java
 // BROKEN — Injecting a request-scoped bean directly into a singleton without a proxy
 @Component
@@ -2599,7 +2599,7 @@ public class Application {
       {
         id: 54,
         text: "What are Spring Boot Starters?",
-        answer: "Starters are **dependency bundles** — one coordinate that pulls in a curated, version-aligned set of jars. Add `spring-boot-starter-web` and you get Spring MVC, Jackson, and embedded Tomcat, all tested together at those versions — Bean Validation split out into its own starter in Boot 2.3, so `@Valid` needs `spring-boot-starter-validation` on top. The version alignment is the real value: `spring-boot-starter-parent` or the BOM pins everything, so you never write a `<version>` tag for a Spring dependency. Resolve those by hand and you get the classic `NoSuchMethodError` at startup, where the Jackson you pulled in doesn't match the one Spring compiled against.",
+        answer: "Starters are **dependency bundles** — one coordinate that pulls in a curated, version-aligned set of jars. Add `spring-boot-starter-web` and you get Spring MVC, Jackson, and embedded Tomcat, all tested together at those versions. Bean Validation split into its own starter in Boot 2.3, so `@Valid` needs `spring-boot-starter-validation` on top. The version alignment is the real value: `spring-boot-starter-parent` or the BOM pins everything, so you never write a `<version>` tag for a Spring dependency. Resolve those by hand and you get the classic `NoSuchMethodError` at startup, where the Jackson you pulled in doesn't match the one Spring compiled against.",
         explanation: `**Analogy:** A Spring Boot Starter is like ordering a combo meal at a fast-food restaurant. Instead of ordering a burger, fries, and drink separately, you order "Combo #1", and the restaurant gives you perfectly paired items in one bundle.
 
 \`\`\`xml
@@ -5472,6 +5472,40 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 125,
         text: "What is the difference between unit testing and integration testing?",
+        answer: "A **unit test** exercises one class with its collaborators replaced by mocks — no Spring context, no database, no network — so it runs in milliseconds and tells you exactly which class broke. An **integration test** wires real components together and checks they work as a group: the repository really talks to Postgres, the controller really deserializes the JSON. The distinction that matters is what a failure tells you. A failing unit test points at one method; a failing integration test says something along the path is broken. Keep most of your tests at the unit level, for speed and precision. Then keep enough integration tests to prove the wiring, because mocks agreeing with each other proves nothing about production.",
+        explanation: `**Analogy:** a unit test is bench-testing the fuel pump on its own — you know instantly whether the pump is bad. An integration test is starting the engine: it proves fuel, spark, and air actually work together, and when it fails you go looking for which part let you down.
+
+\`\`\`java
+// BAD — this calls itself a unit test but boots the entire application to check
+// arithmetic. Eight seconds of context startup for a method with no dependencies.
+@SpringBootTest
+class DiscountCalculatorTest {
+    @Autowired DiscountCalculator calculator;
+
+    @Test
+    void appliesTenPercentOverFiftyPounds() {
+        assertThat(calculator.discountFor(new BigDecimal("60.00")))
+            .isEqualByComparingTo("6.00");
+    }
+}
+\`\`\`
+
+\`\`\`java
+// GOOD — no Spring, no context, runs in single-digit milliseconds.
+class DiscountCalculatorTest {
+    private final DiscountCalculator calculator = new DiscountCalculator();
+
+    @Test
+    void appliesTenPercentOverFiftyPounds() {
+        assertThat(calculator.discountFor(new BigDecimal("60.00")))
+            .isEqualByComparingTo("6.00");
+    }
+}
+\`\`\`
+
+**Where the line actually falls in a Spring app:** anything that's pure logic — pricing rules, validation, state transitions, mapping — is a plain JUnit test with mocks and no Spring. Anything whose *correctness lives in the wiring* needs the real thing: a \`@Query\` that has to be valid JPQL, a \`@Transactional\` boundary that must actually roll back, JSON that must deserialize into your DTO, a security rule that must reject an anonymous caller. Mocks can't fail those, because a mock repository returns whatever you told it to regardless of what the real query does.
+
+The suite that goes wrong is the one that's all integration tests: it takes 25 minutes, so people stop running it locally, and a failure names a whole request path rather than a class. The opposite failure is a suite that's all unit tests with everything mocked — every test green, and the app doesn't start because two beans were never wired together.`,
         followUps: [
           { text: "Where do you draw the line in a Spring Boot app (service unit test vs `@SpringBootTest`)?" },
           { text: "What is the testing pyramid, and why prefer more unit tests?" },
@@ -5481,6 +5515,46 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 126,
         text: "How do you write unit tests in Spring Boot using JUnit and Mockito?",
+        answer: "You test the class with **plain JUnit 5 and no Spring at all** — either `new OrderService(mockRepo, mockGateway)` directly, or `@ExtendWith(MockitoExtension.class)` with `@Mock` fields and `@InjectMocks`. Structure every test **Arrange-Act-Assert**: set up the stubs, call the one method under test, assert the outcome. Stub only what the path actually uses, because Mockito's strict stubs fail the test with `UnnecessaryStubbingException` when you don't. And assert on **behaviour, not implementation** — check that the returned order is `CONFIRMED` and that `paymentGateway.charge()` was called once, not that six internal methods ran in a particular order.",
+        explanation: `\`\`\`java
+// BAD — a Spring context for a class with two mockable dependencies, plus field
+// injection so you can't even construct it yourself. Slow AND awkward to set up.
+@SpringBootTest
+class OrderServiceTest {
+    @Autowired OrderService orderService;
+    @MockitoBean OrderRepository orderRepository;   // 8s startup to test an if-statement
+}
+\`\`\`
+
+\`\`\`java
+// GOOD — plain JUnit 5 + Mockito. No Spring anywhere. Arrange-Act-Assert.
+@ExtendWith(MockitoExtension.class)      // activates @Mock/@InjectMocks + strict stubs
+class OrderServiceTest {
+
+    @Mock private OrderRepository orderRepository;
+    @Mock private PaymentGateway paymentGateway;
+    @InjectMocks private OrderService orderService;   // built via its constructor
+
+    @Test
+    void confirmsOrderWhenPaymentSucceeds() {
+        // Arrange
+        Order pending = new Order(1L, PENDING);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(pending));
+        when(paymentGateway.charge(any())).thenReturn(PaymentResult.approved("ch_1"));
+
+        // Act — exactly one call, so a failure has exactly one cause
+        Order result = orderService.confirm(1L);
+
+        // Assert — on the outcome, plus the one interaction that matters
+        assertThat(result.getStatus()).isEqualTo(CONFIRMED);
+        verify(paymentGateway).charge(any());
+    }
+}
+\`\`\`
+
+**Strict stubs will fail your test, and that's a feature.** \`MockitoExtension\` runs in \`STRICT_STUBS\` mode, so a \`when(...)\` that no code path ever reaches throws \`UnnecessaryStubbingException\`. It feels hostile the first time. What it's telling you is that either the test is lying about what it exercises, or you copy-pasted setup you don't need.
+
+**Two habits worth forming.** Use **AssertJ** (\`assertThat(x).isEqualTo(y)\`) rather than JUnit's bare \`assertEquals\` — the fluent API gives far better failure messages on collections and objects, and \`spring-boot-starter-test\` already ships it. And name tests after behaviour: \`confirmsOrderWhenPaymentSucceeds\` tells you what broke from the CI output alone, where \`testConfirm1\` sends you reading code.`,
         followUps: [
           { text: "What is the difference between JUnit 4 and JUnit 5 annotations?" },
           { text: "How do you structure Arrange-Act-Assert in a clean test?" },
@@ -5490,6 +5564,51 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 127,
         text: "What is `@SpringBootTest`, and how does it differ from `@WebMvcTest` and `@DataJpaTest`?",
+        answer: "`@SpringBootTest` starts the **whole application context** — every bean, and optionally a real embedded server — so it's the honest end-to-end check and the slowest thing in your suite. **Slice annotations** load one layer instead. `@WebMvcTest` gives you the MVC stack and your controllers with `MockMvc` wired up, but **no `@Service` or `@Repository` beans** — you supply those as `@MockitoBean`. `@DataJpaTest` gives you Hibernate, your entities and repositories against a test database, and **rolls back after every test**. Reach for a slice when you're testing one layer's behaviour, and for `@SpringBootTest` when the thing you're testing *is* the wiring.",
+        explanation: `\`\`\`java
+// WEB SLICE — controllers, @ControllerAdvice, converters, filters. No @Service,
+// no @Repository, no DataSource. Starts in about a second.
+@WebMvcTest(OrderController.class)
+class OrderControllerTest {
+
+    @Autowired MockMvc mockMvc;
+
+    // The service doesn't exist in this context, so you must supply it.
+    // @MockitoBean since Boot 3.4 — @MockBean is the deprecated older spelling.
+    @MockitoBean OrderService orderService;
+
+    @Test
+    void returns404WhenOrderMissing() throws Exception {
+        when(orderService.findById(99L)).thenThrow(new OrderNotFoundException(99L));
+        mockMvc.perform(get("/api/orders/99"))
+               .andExpect(status().isNotFound());   // proves your @ControllerAdvice works
+    }
+}
+\`\`\`
+
+\`\`\`java
+// JPA SLICE — entities, repositories, EntityManager, a test DataSource.
+// Transactional per test method and rolled back automatically.
+@DataJpaTest
+class OrderRepositoryTest {
+
+    @Autowired OrderRepository orderRepository;
+    @Autowired TestEntityManager em;
+
+    @Test
+    void findsPendingOrdersOlderThanADay() {
+        em.persist(new Order(PENDING, Instant.now().minus(2, DAYS)));
+        em.flush();   // force the INSERT, or the query below won't see the row
+
+        assertThat(orderRepository.findStalePending(Instant.now().minus(1, DAYS)))
+            .hasSize(1);
+    }
+}
+\`\`\`
+
+**Why slices are fast is context caching, not just bean count.** Spring caches one application context per unique test configuration and reuses it across test classes. Every class with the same annotations and the same mocks shares a context; every distinct combination builds another one. That's why scattering \`@MockitoBean\` of different types across many classes quietly multiplies your contexts and slows the whole suite — and it's why \`@DirtiesContext\` is expensive, since it evicts a cached context that everything after it has to rebuild.
+
+**When you genuinely need the full context:** when the thing under test *is* the wiring. A \`@Transactional\` rollback that has to work through the real proxy, a \`@Scheduled\` job, security filter-chain ordering, or a request path running from HTTP all the way to a real database. Add \`webEnvironment = RANDOM_PORT\` and inject \`TestRestTemplate\` when you want a real HTTP round trip rather than \`MockMvc\`. Keep the number of these low and deliberate — they're what turns a 40-second suite into a 20-minute one.`,
         followUps: [
           { text: "What does each slice load into the context?" },
           { text: "Why are slice tests faster than full `@SpringBootTest`?" },
@@ -5499,6 +5618,50 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 128,
         text: "What is Mockito, and how do `@Mock`, `@InjectMocks`, and `@Spy` differ?",
+        answer: "Mockito is the mocking library bundled in `spring-boot-starter-test` — it generates stand-in objects so you can test one class without its real collaborators. **`@Mock`** creates a fake whose every method returns null, 0, or empty until you stub it. **`@Spy`** wraps a **real object** and runs the real methods unless you stub one, so it's a partial mock. **`@InjectMocks`** builds the class under test and pushes the `@Mock` fields into it, preferring its constructor. Default to `@Mock`, and reach for `@Spy` only when you need most of a real object's behaviour with one method overridden. The trap with `@InjectMocks` is silence: a dependency with no matching mock stays **null**, and you find out through an NPE rather than a wiring error.",
+        explanation: `\`\`\`java
+// @Mock — fully faked. Unstubbed methods return null/0/empty, never real logic.
+@Mock private OrderRepository orderRepository;
+
+// @Spy — a REAL object. Unstubbed methods run their real implementation.
+@Spy private PricingRules pricingRules = new PricingRules();
+
+// @InjectMocks — constructs the subject and feeds the mocks above into it.
+@InjectMocks private OrderService orderService;
+
+@Test
+void usesRealPricingExceptForTheSurchargeRule() {
+    // Stub ONE method on the spy; every other rule keeps its real behaviour.
+    // Note doReturn(...).when(spy) — when(spy.surchargeFor(...)) would CALL the
+    // real method while setting up the stub. That's how spies surprise people.
+    doReturn(new BigDecimal("5.00")).when(pricingRules).surchargeFor(any());
+
+    assertThat(orderService.quote(order)).isEqualByComparingTo("55.00");
+}
+\`\`\`
+
+\`\`\`java
+// THE @InjectMocks TRAP — a dependency with no matching @Mock is silently null.
+@ExtendWith(MockitoExtension.class)
+class OrderServiceTest {
+    @Mock private OrderRepository orderRepository;
+    // Someone added a PaymentGateway parameter to OrderService's constructor and
+    // didn't add a @Mock for it here. Nothing complains at setup time.
+    @InjectMocks private OrderService orderService;
+
+    @Test
+    void confirmsOrder() {
+        orderService.confirm(1L);   // NullPointerException — paymentGateway is null
+    }
+}
+// Which is why a plain constructor call ages better in tests:
+// new OrderService(orderRepository, paymentGateway) stops COMPILING when the
+// constructor changes, instead of failing at runtime with an NPE.
+\`\`\`
+
+**When a spy is genuinely the right call:** a legacy class doing five things where you need four of them real and one stubbed out — usually the one that hits the network or reads the clock. It's a pragmatic tool for code you can't refactor today. If you're reaching for \`@Spy\` on code you own, that's usually the class telling you it has two responsibilities and wants splitting.
+
+**The Spring-context equivalents are \`@MockitoBean\` and \`@MockitoSpyBean\`** (Boot 3.4+, replacing the now-deprecated \`@MockBean\` and \`@SpyBean\`). Those **replace the bean inside the application context**, so every collaborator that gets it injected receives the fake. That's the difference from \`@Mock\`, which only exists inside your test class and knows nothing about Spring.`,
         followUps: [
           { text: "When would you use a spy instead of a mock?" },
           { text: "What is the difference between `when().thenReturn()` and `doReturn().when()`?" },
@@ -5508,6 +5671,58 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 129,
         text: "How do you mock a REST API call in a test?",
+        answer: "It depends which side you're testing. To test **your own class's logic**, mock the client interface with Mockito — `when(inventoryClient.findStock(\"SKU-1\")).thenReturn(...)` — and no HTTP happens at all. To test **the client itself** — URL building, headers, status handling, JSON deserialization — you need a fake HTTP server. That's `MockRestServiceServer` for `RestTemplate` and `RestClient`, usually via the `@RestClientTest` slice, or **WireMock** for anything else. Mockito tests your code; WireMock tests the contract. The gap people miss is that a Mockito stub happily returns a response shape the real API never sends, so a field-name mismatch survives a completely green suite.",
+        explanation: `\`\`\`java
+// Testing YOUR logic — the HTTP client is just an interface, so Mockito is enough.
+@ExtendWith(MockitoExtension.class)
+class OrderServiceTest {
+    @Mock private InventoryClient inventoryClient;     // Feign interface, or any client
+    @InjectMocks private OrderService orderService;
+
+    @Test
+    void rejectsOrderWhenStockIsShort() {
+        when(inventoryClient.findStock("SKU-1")).thenReturn(new StockDto("SKU-1", 0));
+
+        assertThatThrownBy(() -> orderService.place(new OrderRequest("SKU-1", 2)))
+            .isInstanceOf(InsufficientStockException.class);
+    }
+    // Fast and focused. But note what it CANNOT catch: if the real /api/stock returns
+    // {"quantity": 0} and StockDto maps "available", this test still passes.
+}
+\`\`\`
+
+\`\`\`java
+// Testing the CLIENT ITSELF — real HTTP against a stub server, so URL building,
+// headers, status handling and JSON mapping all get genuinely exercised.
+@SpringBootTest
+@AutoConfigureWireMock(port = 0)
+class InventoryClientTest {
+
+    @Autowired InventoryClient inventoryClient;
+
+    @Test
+    void mapsServiceUnavailableToRetryableException() {
+        stubFor(get(urlEqualTo("/api/stock/SKU-1"))
+            .willReturn(aResponse().withStatus(503)));        // downstream is down
+
+        assertThatThrownBy(() -> inventoryClient.findStock("SKU-1"))
+            .isInstanceOf(RetryableException.class);          // proves your ErrorDecoder
+    }
+
+    @Test
+    void surfacesSlowResponseAsATimeout() {
+        stubFor(get(urlEqualTo("/api/stock/SKU-2"))
+            .willReturn(aResponse().withFixedDelay(5_000)));  // beyond your readTimeout
+
+        assertThatThrownBy(() -> inventoryClient.findStock("SKU-2"))
+            .isInstanceOf(FeignException.class);
+    }
+}
+\`\`\`
+
+**The lighter option** for \`RestTemplate\` and \`RestClient\` is \`MockRestServiceServer\`, normally through the \`@RestClientTest\` slice. It intercepts at the client level with no socket involved, so it starts faster than WireMock — but for the same reason it can't reproduce a timeout, a connection reset, or a half-written response body. For \`WebClient\`, use WireMock or OkHttp's \`MockWebServer\`, since \`MockRestServiceServer\` doesn't cover it.
+
+**Testing the failure paths is the part people skip**, and it's where the interesting bugs live. WireMock can return a 503, stall past your read timeout, drop the connection mid-body, or return valid JSON with the wrong shape. Those are precisely the paths your retry policy, \`ErrorDecoder\`, circuit breaker, and fallback exist for — and precisely the ones a Mockito stub can never exercise honestly, because it throws whatever exception you told it to rather than whatever the HTTP stack really produces.`,
         followUps: [
           { text: "How do you mock a Feign client vs WebClient?" },
           { text: "What is WireMock, and when do you prefer it over pure Mockito?" },
@@ -5517,6 +5732,53 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 130,
         text: "What is `MockMvc`, and how is it used to test controllers?",
+        answer: "`MockMvc` calls your controllers **through the real Spring MVC machinery** — routing, argument resolution, validation, message converters, exception handlers — but without starting a server or opening a socket. So you get realistic controller behaviour at close to unit-test speed. You drive it with `mockMvc.perform(get(\"/api/orders/1\"))` and assert with `andExpect(status().isOk())` and `jsonPath(\"$.status\").value(\"CONFIRMED\")`. Pair it with `@WebMvcTest` so only the web layer loads and the services beneath are `@MockitoBean`. What it can't prove is anything below the controller: no repository, no real JSON over the wire, no embedded server.",
+        explanation: `\`\`\`java
+@WebMvcTest(OrderController.class)
+class OrderControllerTest {
+
+    @Autowired MockMvc mockMvc;
+    @MockitoBean OrderService orderService;      // @MockBean is deprecated in Boot 3.4+
+
+    @Test
+    void returnsOrderAsJson() throws Exception {
+        when(orderService.findById(1L)).thenReturn(new OrderDto(1L, "CONFIRMED"));
+
+        mockMvc.perform(get("/api/orders/1").accept(APPLICATION_JSON))
+               .andExpect(status().isOk())
+               .andExpect(jsonPath("$.id").value(1))
+               .andExpect(jsonPath("$.status").value("CONFIRMED"));
+    }
+
+    @Test
+    void returns400WhenQuantityIsNegative() throws Exception {
+        mockMvc.perform(post("/api/orders")
+                   .contentType(APPLICATION_JSON)
+                   .content("{\\"sku\\":\\"SKU-1\\",\\"quantity\\":-2}"))
+               .andExpect(status().isBadRequest());   // proves @Valid is really wired
+    }
+}
+\`\`\`
+
+\`\`\`java
+// Secured endpoints — spring-security-test drives the security context for you.
+@Test
+@WithMockUser(roles = "ADMIN")            // the request runs as an ADMIN principal
+void adminCanCancelOrder() throws Exception {
+    mockMvc.perform(delete("/api/orders/1").with(csrf()))   // omit csrf() and you get 403
+           .andExpect(status().isNoContent());
+}
+
+@Test
+void anonymousCallerIsRejected() throws Exception {
+    mockMvc.perform(delete("/api/orders/1").with(csrf()))
+           .andExpect(status().isUnauthorized());
+}
+\`\`\`
+
+**Standalone setup versus the Spring context.** \`MockMvcBuilders.standaloneSetup(new OrderController(service))\` registers just that one controller against a bare-bones MVC setup, with no application context at all — the fastest option there is. What you lose is everything configured *around* the controller: your \`@ControllerAdvice\` isn't registered, custom converters and argument resolvers aren't applied, and there's no security filter chain. So a test asserting the 404 your exception handler produces passes under \`@WebMvcTest\` and fails standalone. Prefer the slice; keep standalone for a controller with genuinely no framework interaction.
+
+**Know its boundary.** \`MockMvc\` never opens a socket — it invokes \`DispatcherServlet\` directly with a mock request and response. That's what makes it fast while still running the whole MVC pipeline, but it means the embedded server, real connection handling, and everything below your controller go untested. When you want an actual HTTP round trip, that's \`@SpringBootTest(webEnvironment = RANDOM_PORT)\` with \`TestRestTemplate\`.`,
         followUps: [
           { text: "How do you assert JSON paths and status codes with MockMvc?" },
           { text: "What is the difference between standalone setup and full Spring context?" },
@@ -5526,6 +5788,47 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 131,
         text: "What is Testcontainers, and why would you use it?",
+        answer: "Testcontainers starts **real dependencies in Docker containers** for the life of your tests — the same Postgres 16, the same Kafka, the same Redis you run in production — and throws them away afterwards. You use it because the usual alternative, H2, is **a different database wearing a costume**. It has no `jsonb`, no real `ON CONFLICT`, and dialect differences that hand you a green suite and a broken deploy. In Boot 3.1+ you wire it with **`@ServiceConnection`** on the container field and Spring points the datasource at it automatically, with no `@DynamicPropertySource` boilerplate. The costs are real — Docker has to exist on every machine and in CI, and each container adds seconds to startup.",
+        explanation: `**Analogy:** H2 is a flight simulator. Good enough to practise the basics, but it doesn't have your aircraft's engine, and only one of the two tells you whether you'll actually make it off the runway.
+
+\`\`\`java
+// Boot 3.1+ — @ServiceConnection wires the datasource automatically.
+// No @DynamicPropertySource, no URL/username/password plumbing.
+@SpringBootTest
+@Testcontainers
+class OrderRepositoryIT {
+
+    @Container
+    @ServiceConnection                     // Boot reads host/port/credentials itself
+    static PostgreSQLContainer<?> postgres =
+        new PostgreSQLContainer<>("postgres:16-alpine");
+    // static = ONE container shared by every test in this class. Non-static starts
+    // and stops a fresh Postgres per test method — minutes of pure waste.
+
+    @Autowired OrderRepository orderRepository;
+
+    @Test
+    void nativeUpsertWorksOnRealPostgres() {
+        // ON CONFLICT ... DO UPDATE is Postgres syntax that H2 rejects outright,
+        // so this test can only exist against the real database.
+        orderRepository.upsertByClientRef("ref-1", CONFIRMED);
+        assertThat(orderRepository.findByClientRef("ref-1")).isPresent();
+    }
+}
+\`\`\`
+
+\`\`\`java
+// Same pattern for Kafka — and for Redis, RabbitMQ, Mongo, Elasticsearch.
+@Container
+@ServiceConnection
+static KafkaContainer kafka =
+    new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
+// Boot sets spring.kafka.bootstrap-servers from the running container.
+\`\`\`
+
+**Why not H2.** It's a different database pretending to be yours. Even in Postgres-compatibility mode it lacks \`jsonb\`, real \`ON CONFLICT\`, partial indexes, and the exact locking and constraint-violation behaviour you depend on. The bugs it lets through are the ones that only surface in production — a native query that won't parse, a unique constraint that fires differently, a migration that works on one engine and not the other. If your tests run Flyway migrations, Testcontainers also verifies **the migrations themselves**, which H2 usually can't do at all.
+
+**Paying for it honestly.** Docker must be available locally and in CI, cold image pulls are slow the first time, and every container adds startup seconds. Mitigate with a **static container per class**, a **singleton container** shared across the whole suite, or **reuse** — \`withReuse(true)\` plus \`testcontainers.reuse.enable=true\` in \`~/.testcontainers.properties\` keeps the container alive between runs. Reuse is a developer-machine optimisation: leave it off in CI, where every build should start from clean state.`,
         followUps: [
           { text: "How do you spin up Postgres/Kafka in integration tests?" },
           { text: "What are the trade-offs vs H2 in-memory databases?" },
@@ -5535,6 +5838,49 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 132,
         text: "How do you handle test data setup and teardown in Spring Boot tests?",
+        answer: "Default to **`@Transactional` on the test class**: Spring starts a transaction per test method and **rolls it back at the end**, so every test sees a clean database and you write no cleanup code. `@Sql` runs a script before or after a test when you need a bulk fixture, and `@BeforeEach` builds objects in Java when the setup is small enough to read. The rule that keeps a suite healthy is **isolation** — every test creates what it needs and relies on nothing another test left behind. And know where rollback stops working. If the code under test commits on a different thread your transaction can't undo it — exactly the case with `@SpringBootTest(webEnvironment = RANDOM_PORT)` over real HTTP.",
+        explanation: `\`\`\`java
+// The default: a transaction per test, rolled back when the method ends.
+@DataJpaTest              // already transactional; @SpringBootTest needs @Transactional
+class OrderRepositoryTest {
+
+    @Autowired OrderRepository orderRepository;
+    @Autowired TestEntityManager em;
+
+    @Test
+    void findsByStatus() {
+        em.persist(new Order("SKU-1", PENDING));
+        em.flush();       // WITHOUT flush the INSERT sits in the persistence context
+                          // and the repository query below won't see the row
+        assertThat(orderRepository.findByStatus(PENDING)).hasSize(1);
+    }
+    // No cleanup code anywhere. The rollback handles it.
+}
+\`\`\`
+
+\`\`\`java
+// WHERE ROLLBACK QUIETLY STOPS WORKING — a real HTTP call is handled on a server
+// thread with its OWN transaction, which commits. Your test can't roll that back.
+@SpringBootTest(webEnvironment = RANDOM_PORT)
+@Transactional                                  // gives you FALSE confidence here
+class OrderApiIT {
+
+    @Autowired TestRestTemplate restTemplate;
+
+    @Test
+    void createsOrder() {
+        restTemplate.postForEntity("/api/orders", new OrderRequest("SKU-1", 1), Void.class);
+        // That row is COMMITTED by the server thread and outlives this test.
+        // The next test will see it. Clean up explicitly or reset with @Sql.
+    }
+}
+\`\`\`
+
+**\`@Sql\` for the fixtures that Java setup makes ugly.** \`@Sql("/fixtures/orders.sql")\` runs before the test method, and \`@Sql(scripts = "/cleanup.sql", executionPhase = AFTER_TEST_METHOD)\` runs after it. Use it for bulk reference data or for states that are awkward to express through the entity model. Keep \`@BeforeEach\` for small, readable object graphs — if you have to open another file to work out what the test is doing, the script cost you more than it saved.
+
+**\`@DirtiesContext\` is the expensive one.** It marks the cached application context as polluted, so Spring closes and rebuilds it — and every later test class that would have reused that context now pays full startup again. A single careless \`@DirtiesContext\` can add minutes to a suite. You do need it when a test genuinely mutates shared singleton state (a cache, an in-memory registry, a bean you reconfigured at runtime), but resetting that state in an \`@AfterEach\` is nearly always the cheaper fix.
+
+**Isolation is what keeps the suite trustworthy.** Order-dependent tests pass locally in your IDE and fail in CI when the runner shuffles them, and that failure costs far more to debug than the shared fixture ever saved you.`,
         followUps: [
           { text: "What does `@Transactional` on a test class do for rollback?" },
           { text: "How do you use `@Sql` scripts or `@BeforeEach` fixtures?" },
@@ -5553,6 +5899,27 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 133,
         text: "What is the difference between Maven and Gradle?",
+        answer: "Both compile your code and resolve dependencies — the difference is how you describe the build. **Maven** is declarative XML with a fixed lifecycle, so it's verbose but every Maven project looks the same and any developer can read it. **Gradle** is a Groovy or Kotlin script, so it's far more concise and flexible, at the risk of the build becoming its own codebase nobody wants to touch. Gradle is usually **faster** because of incremental builds and a warm daemon. For a standard Spring Boot service either works, and most teams pick Maven for predictability.",
+        explanation: `The same dependency, both ways:
+
+\`\`\`xml
+<!-- Maven — pom.xml. No <version>: spring-boot-starter-parent manages it. -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+\`\`\`
+
+\`\`\`groovy
+// Gradle — build.gradle. One line, version managed by the Boot plugin.
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+\`\`\`
+
+**Running a Boot app:** \`mvn spring-boot:run\` or \`./gradlew bootRun\`. Building the JAR: \`mvn clean package\` or \`./gradlew build\`. Both produce the same executable fat JAR.
+
+**Why Maven still wins by default in the Spring world:** the XML is rigid, and rigidity is the feature — there's one obvious way to do things, so a new joiner reads the POM and knows the build. Gradle's speed advantage is real on large multi-module projects, which is why Android standardised on it, but on a single service that builds in 30 seconds you'll never notice it. Use the **wrapper** either way (\`mvnw\` / \`gradlew\`) so CI and every laptop build with the same tool version.`,
         followUps: [
           { text: "What are pros of Gradle's incremental builds and Kotlin DSL?" },
           { text: "Why do many Spring Boot projects still default to Maven?" },
@@ -5562,6 +5929,23 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 134,
         text: "What is the Maven lifecycle, and what are common phases (compile, test, package, install)?",
+        answer: "Maven runs a **fixed, ordered sequence of phases**, and asking for one runs every phase before it too. The default lifecycle is `validate` → `compile` → `test` → `package` → `verify` → `install` → `deploy`. So `mvn package` validates, compiles, runs your unit tests, and only then builds the JAR — you never run these individually. `clean` belongs to a separate lifecycle, which is why you write `mvn clean package` to wipe `target/` first. That cumulative behaviour is the one thing to remember.",
+        explanation: `\`\`\`bash
+mvn compile        # validate + compile -> target/classes
+mvn test           # ...+ run unit tests (surefire)
+mvn package        # ...+ build the JAR into target/
+mvn verify         # ...+ run integration tests (failsafe)
+mvn install        # ...+ copy the JAR into your local ~/.m2 repository
+mvn deploy         # ...+ upload it to a remote/company repository
+
+mvn clean verify   # 'clean' is a DIFFERENT lifecycle, so you name it explicitly
+\`\`\`
+
+**\`package\` vs \`install\`** is the pair that gets asked. \`package\` leaves the JAR in \`target/\`, where only this project can see it. \`install\` also copies it into your local \`~/.m2\` repository, so **another project on your machine** can declare it as a dependency. You need \`install\` when you're building a shared library locally; for a deployable service, \`package\` is enough.
+
+**Plugins do the actual work.** A phase on its own does nothing — it's a slot that plugin goals bind to. \`maven-compiler-plugin:compile\` binds to \`compile\`, \`maven-surefire-plugin:test\` binds to \`test\`, and \`spring-boot-maven-plugin:repackage\` binds to \`package\`, which is what turns a plain JAR into an executable fat JAR. That's why \`mvn package\` on a Boot project gives you something \`java -jar\` can run.
+
+**Surefire vs Failsafe** explains \`verify\`: Surefire runs \`*Test\` classes at the \`test\` phase and **fails the build immediately**, while Failsafe runs \`*IT\` classes at \`integration-test\` and defers failure to \`verify\` so cleanup still happens. That's why integration tests get the \`IT\` suffix.`,
         followUps: [
           { text: "What is the difference between `package` and `install`?" },
           { text: "How do plugins bind to lifecycle phases?" },
@@ -5571,6 +5955,37 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 135,
         text: "What is dependency management in Maven, and how do you resolve version conflicts?",
+        answer: "Maven pulls **transitive dependencies** automatically, so two libraries you declared can each drag in a different version of the same jar. Maven picks one by **nearest-wins**: the version at the shallowest depth in the dependency tree, with ties going to whichever was declared first. You see the whole picture with `mvn dependency:tree`. To take control, pin the version yourself in `<dependencyManagement>` or import a **BOM** — which is exactly what `spring-boot-starter-parent` does — and use `<exclusions>` to cut a specific transitive jar. The reason this matters is that getting it wrong fails at **runtime** with `NoSuchMethodError`, not at build time.",
+        explanation: `\`\`\`bash
+$ mvn dependency:tree
+[INFO] com.acme:order-service
+[INFO] +- org.springframework.boot:spring-boot-starter-web:3.3.0
+[INFO] |  \\- com.fasterxml.jackson.core:jackson-databind:2.17.1
+[INFO] \\- com.acme:legacy-client:2.4.0
+[INFO]    \\- com.fasterxml.jackson.core:jackson-databind:2.9.0   (omitted for conflict)
+#          ^ two versions wanted; 2.17.1 wins because it sits one level shallower.
+#            If 2.9.0 had won, Spring would call methods that don't exist there
+#            and you'd get NoSuchMethodError on the first request, not at build.
+\`\`\`
+
+\`\`\`xml
+<!-- Fixing it: exclude the transitive jar, or pin the version centrally. -->
+<dependency>
+    <groupId>com.acme</groupId>
+    <artifactId>legacy-client</artifactId>
+    <version>2.4.0</version>
+    <exclusions>
+        <exclusion>   <!-- no <version> tag on an exclusion -->
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+\`\`\`
+
+**What a BOM buys you.** \`spring-boot-starter-parent\` (or importing \`spring-boot-dependencies\` with \`<scope>import</scope>\` if you already have a corporate parent) carries a \`dependencyManagement\` block pinning hundreds of libraries to versions Spring tested together. That's why you declare Spring dependencies **with no \`<version>\` tag** — and why adding one by hand is a common way to break an app that was working.
+
+**Useful second command:** \`mvn dependency:tree -Dincludes=com.fasterxml.jackson.core\` filters a large tree down to the one library you're chasing, which beats reading 400 lines of output.`,
         followUps: [
           { text: "What is nearest-wins and dependency mediation?" },
           { text: "How does `dependencyManagement` / BOM help (e.g., Spring Boot parent)?" },
@@ -5580,6 +5995,27 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 136,
         text: "What is the difference between `git merge` and `git rebase`?",
+        answer: "**`git merge`** joins two branches with a **merge commit**, preserving the true history including the fact that work happened in parallel. **`git rebase`** replays your commits one at a time on top of the target branch, giving a **linear history** with no merge commit. The catch is that every replayed commit is a **new commit with a new hash**. That rewriting is the whole rule. Rebase your own local branch to tidy it before opening a PR; merge when you're combining branches other people have. Never rebase anything someone else has already pulled.",
+        explanation: `\`\`\`bash
+# Starting point: you branched off main, then main moved on.
+#   main    A---B---C
+#                \\
+#   feature        D---E
+
+git merge main      # -> a merge commit M ties both histories together
+#   main    A---B---C
+#                \\       \\
+#   feature        D---E---M     history shows the branch really existed
+
+git rebase main     # -> D and E are REPLAYED on top of C as new commits
+#   feature A---B---C---D'---E'   linear, but D' and E' have new hashes
+\`\`\`
+
+**Why rewriting hashes is dangerous on a shared branch.** If a colleague has pulled \`D\` and \`E\`, and you rebase and force-push \`D'\` and \`E'\`, their Git sees commits that no longer exist upstream and commits you don't have. Their next pull creates duplicates of the same changes, and someone ends up reverting the wrong one. The safe rule: **rebase only commits that exist nowhere but your machine.**
+
+**Conflicts feel different in each.** A merge stops once and you fix everything in a single resolution, then \`git commit\`. A rebase stops **per replayed commit**, so a five-commit branch can hand you the same conflict five times — you fix, \`git add\`, \`git rebase --continue\`, repeat. Either way \`--abort\` puts you back exactly where you started.
+
+**What linear history buys you** is readable \`git log\` and usable \`git bisect\`: every commit is a real state of the project, so bisecting to find the commit that introduced a bug actually converges. A history dense with merge commits makes both harder to read. Common team compromise: rebase your feature branch onto \`main\` to keep it current, then merge the PR with a merge commit or a squash so \`main\` records one entry per feature.`,
         followUps: [
           { text: "When is rebase dangerous on shared branches?" },
           { text: "What does a linear history buy you?" },
@@ -5589,6 +6025,28 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 137,
         text: "What is a merge conflict, and how do you resolve it?",
+        answer: "A conflict happens when two branches changed **the same lines of the same file** and Git can't decide which version to keep. Git stops, writes both versions into the file between `<<<<<<<`, `=======`, and `>>>>>>>` markers, and waits for you. You resolve it by editing the file into what the code should actually be, markers deleted, then `git add` that file. Finish with `git commit` for a merge, or `git rebase --continue` for a rebase. If it's going badly, `git merge --abort` or `git rebase --abort` puts you back exactly where you started. The real fix is prevention: small branches merged often.",
+        explanation: `\`\`\`java
+public BigDecimal total() {
+<<<<<<< HEAD                          // what's on the branch you're merging INTO
+    return subtotal.add(shippingFee);
+=======                               // the dividing line
+    return subtotal.add(taxAmount);
+>>>>>>> feature/add-tax              // what's coming FROM the other branch
+}
+
+// Resolve by writing the code you actually want — often BOTH changes, not either:
+public BigDecimal total() {
+    return subtotal.add(shippingFee).add(taxAmount);
+}
+// Then: git add PricingService.java && git rebase --continue
+\`\`\`
+
+**Read the markers correctly.** The top block is **HEAD** — where you currently are, which in a rebase is confusingly the *target* branch, not your work. The bottom is the incoming change. That inversion during a rebase is why people resolve conflicts backwards and discard their own commit; check with \`git status\`, which names both sides explicitly.
+
+**Useful escape hatches:** \`git merge --abort\` / \`git rebase --abort\` cancel cleanly at any point. \`git checkout --ours <file>\` and \`--theirs <file>\` take one side wholesale for files where merging line-by-line is meaningless, like a regenerated lockfile. And \`git diff\` during a conflict shows only the conflicted regions.
+
+**Prevention is the real answer**, and it's what an interviewer is listening for. Conflicts scale with **how long a branch lives and how much it touches**. A branch open for two weeks that reformats a shared class will conflict with everything; a branch merged daily rarely conflicts at all. Pull \`main\` into your branch often rather than at the end, keep PRs small, and agree formatting rules in the toolchain so nobody's IDE reformats a file and collides with every other change in it.`,
         followUps: [
           { text: "What markers appear in conflicted files?" },
           { text: "How do you abort a merge or rebase mid-conflict?" },
@@ -5598,6 +6056,20 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 138,
         text: "What is the difference between `git fetch` and `git pull`?",
+        answer: "**`git fetch`** downloads new commits from the remote and updates your remote-tracking branches like `origin/main`, but changes **nothing** in your working directory or your current branch. **`git pull`** is `fetch` followed immediately by `merge` — so it moves your branch, touches your files, and can drop you into a conflict on the spot. Fetch is always safe; pull is the one that surprises you. Fetch first when you want to see what landed before integrating it, especially on a branch you're mid-way through.",
+        explanation: `\`\`\`bash
+git fetch origin                  # safe: updates origin/main, touches nothing of yours
+git log --oneline HEAD..origin/main   # what landed that I don't have?
+git diff HEAD origin/main             # what would actually change?
+git merge origin/main                 # integrate, now that you've looked
+
+git pull                          # = fetch + merge, all in one, no chance to look
+git pull --rebase                 # = fetch + rebase: replays YOUR commits on top
+\`\`\`
+
+**\`git pull --rebase\` is the one worth adopting.** A plain \`pull\` on a branch where you have local commits creates a merge commit every time, so a busy shared branch fills with "Merge branch 'main' of github.com..." noise that says nothing. \`--rebase\` replays your local commits on top of what you fetched instead, keeping the history linear. Make it the default with \`git config --global pull.rebase true\`. The same rebase caution applies — it's fine here because it's rewriting **your own unpushed commits**.
+
+**A fast-forward merge** is what happens when your branch has no commits of its own and the remote has simply moved ahead: Git doesn't need a merge commit, it just slides your branch pointer forward to the newer commit. That's why pulling on an untouched \`main\` produces no merge commit at all, and why "fast-forward" shows up in the output.`,
         followUps: [
           { text: "What does `git pull --rebase` do?" },
           { text: "Why might you prefer fetch + inspect before merging?" },
@@ -5607,8 +6079,40 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 139,
         text: "What is CI/CD, and have you worked with any pipelines (Jenkins, GitHub Actions)?",
+        answer: "**CI** means every push automatically builds the project and runs the test suite, so integration problems show up in minutes instead of at merge time. **CD** takes that verified build onward. **Continuous delivery** means every green build is *deployable* and a human clicks release; **continuous deployment** means it ships automatically with no gate. A typical Spring Boot pipeline is: build and unit test, integration tests, build a Docker image, push it to a registry, deploy to staging, then production. The rule that makes any of it worth having is that the pipeline is the **only** path to production, and a red build blocks the merge.",
+        explanation: `\`\`\`yaml
+# .github/workflows/build.yml — a realistic minimum for a Spring Boot service
+name: build
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven                  # cache ~/.m2 or every build re-downloads it
+
+      - run: ./mvnw clean verify        # compile + unit tests + integration tests
+
+      - name: Build and push image
+        if: github.ref == 'refs/heads/main'    # only from main, not from every PR
+        run: |
+          ./mvnw spring-boot:build-image -DskipTests
+          echo "\${{ secrets.REGISTRY_TOKEN }}" | docker login -u ci --password-stdin
+          docker push ghcr.io/acme/order-service:\${{ github.sha }}
+\`\`\`
+
+**Tag images with the commit SHA, not \`latest\`.** \`latest\` is mutable, so you can never say with certainty which code is running in production, and a rollback has nothing specific to roll back *to*. The SHA gives you an exact, immutable link from a running container to a line of code.
+
+**Secrets never live in the repo.** Use the CI provider's secret store — GitHub Actions secrets, Jenkins credentials — injected as environment variables at run time, and scoped per environment so a PR build can't reach production credentials. They're masked in logs, but that masking is best-effort, so don't echo them. If one leaks, **rotate it**; deleting the commit doesn't help, since the value is in the reflog and on every clone.
+
+**Delivery vs deployment** is the distinction interviewers actually probe. Continuous *delivery* stops at a human approval gate, which is what most teams with a real change-management process run. Continuous *deployment* removes the gate entirely, and it only works if you genuinely trust the tests — plus feature flags and fast rollback to limit the blast radius of a bad change.`,
         followUps: [
-          { text: "What stages would you put in a Spring Boot pipeline (build, test, image, deploy)?" },
+          { text: "What stages would you put in a Spring Boot pipeline?" },
           { text: "How do you keep secrets in CI?" },
           { text: "What is the difference between continuous delivery and continuous deployment?" },
         ],
@@ -5616,6 +6120,31 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 140,
         text: "What is Docker, and how do you containerize a Spring Boot application?",
+        answer: "Docker packages your application together with its runtime and dependencies into an **image**, which runs identically on any machine with Docker — that's what kills \"works on my machine\". For a Spring Boot app the minimum is a `Dockerfile` that starts from a JRE base image, copies the fat JAR in, and sets `ENTRYPOINT [\"java\",\"-jar\",\"app.jar\"]`. Better is a **multi-stage build**: one stage with the JDK and Maven to compile, and a final stage holding only a JRE and the JAR. That way you don't ship your source code and build tools to production. You can also skip the Dockerfile entirely with `./mvnw spring-boot:build-image`, which uses Cloud Native Buildpacks.",
+        explanation: `\`\`\`bash
+# Stage 1 — build. Needs the full JDK and Maven; none of it ships.
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline        # cached layer: only re-runs when pom.xml changes
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# Stage 2 — run. Only a JRE and the JAR: smaller image, smaller attack surface.
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+RUN addgroup -S app && adduser -S app -G app   # don't run as root
+USER app
+COPY --from=build /app/target/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
+\`\`\`
+
+**Why a JRE-only final stage.** A JDK image carries a compiler, debugging tools, and often a shell you have no use for at runtime — that's hundreds of megabytes of extra download on every pull and a much larger surface for a CVE scanner to flag. Copying only the JAR into a JRE base typically takes the image from ~500MB to ~200MB, and less on Alpine.
+
+**Layer ordering is what makes rebuilds fast.** Docker caches each instruction and invalidates everything after the first change. Copying \`pom.xml\` and resolving dependencies *before* copying \`src\` means a code-only change reuses the cached dependency layer instead of re-downloading the internet. Boot's **layered JARs** take this further, splitting dependencies from application classes so a code change ships a few hundred KB rather than the whole fat JAR.
+
+**Configuration comes in as environment variables**, never baked into the image — that's the whole point of one artifact per build. \`docker run -e SPRING_PROFILES_ACTIVE=prod -e SPRING_DATASOURCE_URL=... -p 8080:8080 order-service:abc123\`. Relaxed binding maps those underscored names onto \`spring.datasource.url\`, so no code or image change is needed per environment.`,
         followUps: [
           { text: "What would a multi-stage Dockerfile for a Boot JAR look like at a high level?" },
           { text: "Why use a JRE-only base image in the final stage?" },
@@ -5625,6 +6154,38 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 141,
         text: "What is the purpose of a Dockerfile vs docker-compose?",
+        answer: "A **Dockerfile** describes how to build **one image**. **docker-compose** describes how to run **several containers together** — your app plus Postgres plus Redis. Their networks, volumes, ports, and environment all sit in one `docker-compose.yml`, started with a single `docker compose up`. They're not alternatives: compose normally *builds* from your Dockerfile and then runs that image alongside its dependencies. Compose is a local-development and small-deployment tool. On Kubernetes you don't use it at all, because Deployments and Services do that job.",
+        explanation: `\`\`\`yaml
+# docker-compose.yml — the whole local stack in one command
+services:
+  app:
+    build: .                    # builds using your Dockerfile
+    ports: ["8080:8080"]
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/orders   # 'db' = service name
+    depends_on:
+      db: { condition: service_healthy }   # wait for READY, not just started
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: orders
+      POSTGRES_PASSWORD: devonly
+    volumes: ["pgdata:/var/lib/postgresql/data"]   # survives 'docker compose down'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+
+volumes:
+  pgdata:
+\`\`\`
+
+**Networking is the part that surprises people.** Compose puts every service on a shared network and makes each reachable **by its service name** — so the app connects to \`db:5432\`, not \`localhost:5432\`, because inside a container \`localhost\` is that container. The \`ports:\` mapping is only for reaching a container **from your laptop**; containers talking to each other don't need it.
+
+**Volumes** persist data outside the container's writable layer. Without \`pgdata\`, every \`docker compose down\` wipes your local database; with it, the data outlives the container. A bind mount (\`./src:/app/src\`) instead maps a host directory in, which is handy for live-reloading config during development.
+
+**Not for production Kubernetes.** Compose has no scheduling, no self-healing, no rolling updates, no autoscaling, and no multi-node story. Kubernetes replaces it with Deployments, Services, and ConfigMaps. Compose stays genuinely useful for local development and CI — and it's worth noting **Testcontainers covers the same ground for integration tests**, starting the same dependencies from inside the test itself.`,
         followUps: [
           { text: "When do you use compose for local dev with DB + app + Redis?" },
           { text: "How do volumes and networks work in compose?" },
@@ -5634,6 +6195,36 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 142,
         text: "What is Kubernetes, and what is its role in deploying microservices?",
+        answer: "Kubernetes is a **container orchestrator**. You declare the desired state — ten replicas of this image, this much memory, this port — and it continuously makes reality match. That means restarting crashed containers, rescheduling off dead nodes, and rolling out new versions without downtime. For microservices it supplies the platform work you'd otherwise build yourself: **service discovery** through cluster DNS, load balancing, config and secrets, health checking, and autoscaling. The four objects worth being able to name:\n\n- **Pod** — one or more containers running together, sharing a network namespace\n- **Deployment** — keeps N pods of a version alive and handles rolling updates\n- **Service** — a stable address and load balancer in front of changing pods\n- **Ingress** — routes external HTTP traffic into the cluster",
+        explanation: `\`\`\`yaml
+apiVersion: apps/v1
+kind: Deployment                    # keeps 3 pods running; handles the rolling update
+metadata: { name: order-service }
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+        - name: order-service
+          image: ghcr.io/acme/order-service:abc123    # the commit SHA, never :latest
+          ports: [{ containerPort: 8080 }]
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+          livenessProbe:            # failing => RESTART the container
+            httpGet: { path: /actuator/health/liveness, port: 8080 }
+          readinessProbe:           # failing => remove from the Service, no restart
+            httpGet: { path: /actuator/health/readiness, port: 8080 }
+          resources:
+            requests: { memory: "512Mi", cpu: "250m" }   # what the scheduler reserves
+            limits:   { memory: "1Gi",   cpu: "1000m" }  # exceed memory => OOMKilled
+\`\`\`
+
+**The probes are where Kubernetes meets Spring Boot**, and it's the detail worth getting right. Actuator exposes \`/actuator/health/liveness\` and \`/actuator/health/readiness\` once the probes are enabled — automatic when Boot detects Kubernetes. **Liveness failing restarts the container**; **readiness failing only pulls the pod out of the Service** load balancer. Put a database check in the *liveness* probe and a brief DB blip restarts your entire fleet at once, turning a short outage into a much longer one. Dependency checks belong in **readiness**; liveness should fail only when the JVM itself is unrecoverable.
+
+**Why this replaces most of Spring Cloud.** A **Service** gives you a stable DNS name and load balancing, so \`http://order-service:8080\` works without Eureka. **ConfigMaps and Secrets** cover externalized config without a Config Server. **Ingress** handles edge routing. What Kubernetes can't do is in-process behaviour — a circuit breaker, a fallback, a retry with jitter — which is why Resilience4j stays.
+
+**Horizontal Pod Autoscaling** watches a metric, typically CPU or a custom Micrometer metric, and adjusts \`replicas\` between a floor and a ceiling. It only works if your app is **stateless**, since any pod can vanish at any time — which is the same constraint that makes sticky sessions and in-memory rate limiting a bad idea.`,
         followUps: [
           { text: "What are Pod, Deployment, Service, and Ingress?" },
           { text: "How do liveness and readiness probes relate to Spring Actuator?" },
@@ -5652,6 +6243,42 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 143,
         text: "How would you design a URL shortener service?",
+        answer: "Two endpoints: `POST /urls` stores the long URL and returns a short code, and `GET /{code}` looks it up and issues a **redirect**. The interesting parts are code generation and read scale. Generate codes by **base62-encoding an auto-increment id** — seven characters covers 3.5 trillion URLs — rather than hashing the URL, because hashes collide and force a retry loop. Traffic is overwhelmingly **read-heavy**, often 100:1, so the redirect path should hit **Redis** with the database only as a fallback. Use a **302** rather than a 301 if you want click analytics, because browsers cache a 301 and you never see the second click.",
+        explanation: `\`\`\`sql
+-- The whole schema. Note what's indexed and what isn't.
+CREATE TABLE short_url (
+    id          BIGSERIAL PRIMARY KEY,      -- the counter we base62-encode
+    code        VARCHAR(10) UNIQUE NOT NULL, -- unique index = the lookup path
+    long_url    TEXT        NOT NULL,
+    owner_id    BIGINT,
+    expires_at  TIMESTAMPTZ,                 -- NULL = never expires
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_short_url_owner ON short_url(owner_id);
+-- Click events go in a SEPARATE table (or a stream), never as a counter
+-- column here — every redirect would otherwise UPDATE the same hot row.
+\`\`\`
+
+\`\`\`java
+@GetMapping("/{code}")
+public ResponseEntity<Void> redirect(@PathVariable String code) {
+    // Cache first: this is the 99% path and it should never touch Postgres.
+    String longUrl = cache.get(code, () -> repository.findByCode(code)
+            .filter(u -> u.getExpiresAt() == null || u.getExpiresAt().isAfter(now()))
+            .map(ShortUrl::getLongUrl)
+            .orElseThrow(() -> new CodeNotFoundException(code)));
+
+    clickPublisher.publish(code);   // async — never block the redirect on analytics
+
+    return ResponseEntity.status(HttpStatus.FOUND)   // 302, so we see repeat clicks
+            .location(URI.create(longUrl))
+            .build();
+}
+\`\`\`
+
+**Why base62 over a hash.** Encoding a monotonic id is collision-free by construction — id 1 is \`b\`, id 125 is \`cb\`, and no two ids ever produce the same string. Hashing the long URL means checking whether the code already exists and retrying on collision, which adds a read to every write. The one downside is that sequential ids make codes **guessable and enumerable**; if that matters, encode \`id XOR secret\` or draw ids from a shuffled range. For multiple instances, hand each one a **block of ids** (a Redis \`INCRBY\` of 1000) so they don't contend on a single sequence.
+
+**Custom aliases and expiry** are small additions: an alias is just a user-supplied \`code\` that has to pass the unique constraint, so let the database arbitrate and return **409** on violation rather than checking first, which races. Expiry is a nullable \`expires_at\` checked on read, plus a nightly job deleting old rows — check on read regardless, since a cached entry can outlive its own expiry.`,
         followUps: [
           { text: "How do you generate unique short codes at scale (hash vs base62 counter)?" },
           { text: "How would you handle custom aliases and expiration?" },
@@ -5661,6 +6288,39 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 144,
         text: "How would you design a rate limiter for an API?",
+        answer: "You cap how many requests a client can make in a time window, keyed by API key, user id, or IP. **Token bucket** is the usual pick: the bucket refills at a steady rate and each request spends a token, so short bursts are allowed while the long-run average stays capped. That's what Spring Cloud Gateway's `RequestRateLimiter` implements. The critical design point is that the counters must live **outside the instance**, in Redis. Keep them in memory and each pod enforces its own separate limit, so ten pods means ten times the intended rate. Reject with **429** plus a `Retry-After` header so clients back off instead of hammering.",
+        explanation: `\`\`\`yaml
+# Spring Cloud Gateway — token bucket, counters in Redis so all instances share them
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: order-service
+          uri: lb://order-service
+          predicates: [Path=/api/orders/**]
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 20    # sustained requests/second
+                redis-rate-limiter.burstCapacity: 40    # bucket size = burst allowance
+                key-resolver: "#{@apiKeyResolver}"      # bucket per API key, not per IP
+\`\`\`
+
+\`\`\`java
+// Doing it in a service instead — the check must be ATOMIC or two concurrent
+// requests both read "19 used" and both pass, letting you exceed the limit.
+public boolean tryConsume(String apiKey) {
+    String key = "rl:" + apiKey + ":" + (now().getEpochSecond() / 60);   // per-minute
+    Long count = redis.opsForValue().increment(key);   // INCR is atomic; read-then-write is not
+    if (count == 1) redis.expire(key, Duration.ofMinutes(2));  // let old windows die
+    return count <= 100;
+}
+// Exceeded -> 429 with Retry-After, plus X-RateLimit-Remaining so good clients self-regulate.
+\`\`\`
+
+**The three algorithms.** **Fixed window** counts per calendar minute — trivial to implement, but it allows a **double burst at the boundary**: 100 requests at 11:59:59 and 100 more at 12:00:00 is 200 in one second. **Sliding window** fixes that by weighting the previous window, at the cost of more state. **Token bucket** refills continuously and allows a controlled burst, which suits real traffic best. **Leaky bucket** drains at a fixed rate and smooths output completely, which is what you want protecting a fragile downstream that can't absorb bursts at all.
+
+**Gateway, service, or both — both, for different reasons.** The **gateway** does the coarse per-client limit and keeps junk traffic off your fleet entirely. **Individual services** protect specific expensive endpoints — a report that runs a 30-second query needs its own much lower limit than a cache-backed lookup. Rate limiting only at the service means the traffic already cost you a network hop and a thread; only at the gateway means one expensive endpoint can still be hammered inside your limit.`,
         followUps: [
           { text: "Compare token bucket, leaky bucket, and fixed window algorithms." },
           { text: "How would you implement rate limiting with Redis in Spring?" },
@@ -5670,6 +6330,43 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 145,
         text: "How would you handle a scenario where an API needs to process a large file upload without blocking the main thread?",
+        answer: "Ideally the file never passes through your API at all. Use a **pre-signed URL**: the client asks your service for a short-lived S3 URL, uploads **directly to object storage**, then tells you the key. Your JVM never touches the bytes, so file size stops being your problem. If it must go through the service, **stream it** with `MultipartFile.getInputStream()` and never `getBytes()`, which loads the whole file into heap and OOMs the pod. Then do the work **asynchronously**: accept the upload, return **202 Accepted** with a job id, and let a worker process it while the client polls that id for status. Set `spring.servlet.multipart.max-file-size` deliberately, because the default is 1MB.",
+        explanation: `\`\`\`java
+// GOOD — accept, hand off, return immediately. The HTTP thread is free in ~50ms.
+@PostMapping("/api/imports")
+public ResponseEntity<ImportJobDto> upload(@RequestParam MultipartFile file) {
+    if (file.getSize() > MAX_BYTES) throw new PayloadTooLargeException();
+
+    ImportJob job = importJobService.create(file.getOriginalFilename());  // status=PENDING
+
+    // Stream straight to storage — never file.getBytes(), which is the whole file in heap.
+    try (InputStream in = file.getInputStream()) {
+        storage.put(job.getStorageKey(), in, file.getSize());
+    }
+    importQueue.publish(new ImportRequested(job.getId()));   // a worker picks this up
+
+    return ResponseEntity.accepted()                          // 202, not 200
+            .body(ImportJobDto.from(job));                    // client polls /api/imports/{id}
+}
+\`\`\`
+
+\`\`\`yaml
+# Defaults will bite you: max-file-size is 1MB out of the box.
+spring:
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 120MB      # must exceed max-file-size (multipart overhead)
+      file-size-threshold: 2KB     # spill to disk above this instead of buffering in heap
+server:
+  tomcat:
+    connection-timeout: 20s
+    max-swallow-size: -1           # don't truncate a rejected upload's body mid-stream
+\`\`\`
+
+**Why pre-signed URLs win.** A 2GB upload through your service occupies a request thread for minutes, counts against your pod's memory and network, and dies entirely if you deploy mid-upload. With a pre-signed URL the client talks to S3 directly, gets **multipart upload and resume for free**, and your service handles two tiny JSON calls instead. The trade is that you must validate **after** the fact — check the content type and size on the stored object before processing, since you no longer see the bytes on the way in.
+
+**Reporting progress and failures** is what makes 202 usable. The job id addresses a status resource returning \`PENDING\`, \`RUNNING\`, \`COMPLETED\`, or \`FAILED\` with an error message and, for a row-oriented import, a per-row error report. Polling every few seconds is fine and far simpler than WebSockets; use Server-Sent Events only if the UX genuinely needs live progress. Make the worker **idempotent on job id** so a redelivered queue message doesn't import the same file twice.`,
         followUps: [
           { text: "Would you use async processing, streaming, or object storage direct upload?" },
           { text: "How do you report progress and failures to the client?" },
@@ -5679,6 +6376,29 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 146,
         text: "How would you design a notification service that sends emails/SMS asynchronously?",
+        answer: "It **consumes events** rather than exposing a synchronous API — `OrderPlaced` lands on a queue and the notification service decides what to send to whom. That's the central decision: the order service must never wait on email, or a broken SMTP provider fails checkout. Internally it resolves the user's channel preferences, renders a **template**, and calls the provider through an adapter so Twilio or SES can be swapped. Retries use **exponential backoff** with a dead-letter queue for messages that keep failing. Store a record of every send keyed by the **event id**, because at-least-once delivery means a redelivery would otherwise email the customer twice.",
+        explanation: `\`\`\`java
+@KafkaListener(topics = "order-events", groupId = "notification-service")
+public void on(OrderPlaced event) {
+    // IDEMPOTENCY FIRST — this listener WILL see the same event twice.
+    // Unique index on (event_id, channel) lets the DB arbitrate; a select-then-insert races.
+    if (!sendLog.claim(event.eventId(), EMAIL)) {
+        log.debug("already sent for {}, skipping", event.eventId());
+        return;
+    }
+
+    UserPrefs prefs = prefsService.forUser(event.userId());
+    if (!prefs.wants(ORDER_CONFIRMATION, EMAIL)) return;     // respect opt-out
+    if (rateLimiter.exceeded(event.userId())) return;        // no notification storms
+
+    Rendered body = templates.render("order-confirmation", prefs.locale(), event);
+    emailProvider.send(prefs.email(), body);                 // retried by the container
+}
+\`\`\`
+
+**Retries without spamming.** The rule is that a retry must never produce a second delivery, so idempotency comes before backoff, not after. Distinguish **retryable** failures (a 503 from the provider, a timeout — retry with exponential backoff and jitter) from **permanent** ones (invalid address, hard bounce, user opted out — do not retry, mark failed, and suppress that address). Cap attempts and send the rest to a **DLT** with an alert. Then add a **per-user rate cap** on top: a bulk job touching 10,000 orders shouldn't put 200 emails in one person's inbox, and that limit is separate from provider-level retry logic.
+
+**Templating at scale** means the template lives outside the code — in the database or object storage — so marketing can change copy without a deploy, with a rendering engine like Thymeleaf or Handlebars applied per **locale**. Pass the template a small explicit context object rather than your domain entity, or you'll leak internal fields into an email. Version the templates so a send record can say which version produced it, and keep a preview endpoint, because a broken template discovered in production is a broken template that already reached customers.`,
         followUps: [
           { text: "How do you ensure delivery retries without spamming users?" },
           { text: "What role do message queues play in this design?" },
@@ -5688,6 +6408,46 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 147,
         text: "How do you handle caching in a Spring Boot application (`@Cacheable`, Redis)?",
+        answer: "Put **`@Cacheable`** on the method and `@EnableCaching` on a config class: Spring stores the return value keyed by the arguments, and the next call with the same arguments skips the method body entirely. Back it with **Redis** rather than the default in-memory map, so every instance shares one cache and a restart doesn't cold-start it. **`@CachePut`** always runs the method and updates the entry, and **`@CacheEvict`** removes one — you need those two to stop serving data you've just changed. Always set a **TTL**, so a stale entry heals itself instead of persisting forever. And remember it's proxy-based AOP: a call from inside the same class bypasses the cache completely.",
+        explanation: `\`\`\`java
+@Service
+public class ProductService {
+
+    @Cacheable(value = "products", key = "#id")      // miss -> run method, store result
+    public ProductDto findById(Long id) {
+        return repository.findById(id).map(ProductDto::from).orElseThrow();
+    }
+
+    @CachePut(value = "products", key = "#product.id")  // ALWAYS runs, refreshes the entry
+    public ProductDto update(ProductDto product) {
+        return ProductDto.from(repository.save(product.toEntity()));
+    }
+
+    @CacheEvict(value = "products", key = "#id")        // remove on delete
+    public void delete(Long id) { repository.deleteById(id); }
+
+    public ProductDto refreshThenRead(Long id) {
+        update(fetchLatest(id));
+        return findById(id);   // SELF-INVOCATION: bypasses the proxy, so NOT cached
+    }                          // same trap as @Transactional — the call never leaves 'this'
+}
+\`\`\`
+
+\`\`\`yaml
+spring:
+  cache:
+    type: redis
+    redis:
+      time-to-live: 10m          # a default TTL on EVERY entry — never cache forever
+      cache-null-values: false   # or a null result gets cached and hides new data
+  data:
+    redis:
+      host: redis
+\`\`\`
+
+**Choosing TTLs and keys.** The TTL is a **staleness budget**: how out-of-date may this data be before someone is harmed? Product descriptions tolerate an hour, stock levels maybe seconds, a permission check arguably nothing. Pick it from that question, not from a round number. Keys must include **everything that changes the result** — a per-user response keyed only by product id serves user A's data to user B, which is a data-leak bug rather than a performance one. Prefer an explicit \`key = "#id + ':' + #locale"\` over the default key generator, which quietly changes meaning when someone adds a parameter.
+
+**Cache stampede** is what happens when a hot key expires and a hundred concurrent requests all miss simultaneously, all hitting the database with the identical query — the load spike arrives exactly when the cache stops protecting you. Mitigate by **staggering TTLs with jitter** so keys don't expire together, and for genuinely hot keys by letting only one caller recompute while the others briefly serve the stale value or wait on a short lock. Caffeine's \`refreshAfterWrite\` does this by refreshing asynchronously while continuing to serve the old value.`,
         followUps: [
           { text: "What is the difference between `@Cacheable`, `@CachePut`, and `@CacheEvict`?" },
           { text: "How do you choose TTLs and cache keys?" },
@@ -5697,6 +6457,27 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 148,
         text: "How would you scale a Spring Boot application to handle increased traffic?",
+        answer: "**Measure before you scale**, because adding instances usually isn't what helps first. Look at where the time actually goes: an N+1 query, a missing index, or an exhausted connection pool will not improve at all when you double the pods. Once the app itself is sane, scale **horizontally** — more instances behind a load balancer — since that's the only axis that keeps going and it's what Kubernetes does natively. The hard prerequisite is that the service is **stateless**: no in-memory session, no local files, no in-memory counters, so any instance can serve any request. Expect the **database to be the next bottleneck**, because twenty pods contending on one Postgres just moves the queue.",
+        explanation: `\`\`\`yaml
+# The setting that surprises people: 20 pods x 10 connections = 200 connections,
+# against a Postgres whose default max_connections is 100. Scaling out here takes
+# the database DOWN rather than making anything faster.
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 10        # per instance — multiply by replica count
+      connection-timeout: 3000     # fail fast instead of queueing forever
+  jpa:
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50           # batch inserts instead of one round trip per row
+        default_batch_fetch_size: 25   # blunt but effective N+1 mitigation
+\`\`\`
+
+**Vertical versus horizontal.** Vertical means a bigger machine — more CPU and RAM for one instance. It's the quickest fix, needs no code change, and is sometimes exactly right, but it **caps out** at the largest instance you can buy, requires a restart to change, and leaves you a single point of failure. Horizontal means more instances behind a load balancer: effectively unlimited headroom, no restart to scale, and redundancy included. The catch is that it only works for **stateless** services, which is why in-memory HTTP sessions, local file uploads, and in-memory rate-limit counters all have to move to Redis or object storage first. Once they have, a Kubernetes HPA can add pods on CPU or a custom metric automatically.
+
+**The order bottlenecks actually appear in.** First the **database** — missing indexes and N+1 queries, which no amount of scaling fixes. Then the **connection pool**, where requests queue for a connection and latency climbs while CPU sits idle; that symptom pair is diagnostic. Then **external API calls** without timeouts, where one slow downstream parks every request thread. **GC pressure** and CPU come last for a typical CRUD service, and heap tuning is usually the least valuable place to start despite being the most tempting. Check them in that order and you'll fix the real problem far sooner.`,
         followUps: [
           { text: "What is the difference between vertical and horizontal scaling?" },
           { text: "How do stateless services + load balancers enable scale-out?" },
@@ -5706,6 +6487,28 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 149,
         text: "How would you debug a production issue where an API is responding slowly?",
+        answer: "Start with **metrics, not code**. Check `http.server.requests` in Actuator or your dashboard. Which endpoint, which latency percentile, and did the change line up with a deploy or a traffic spike? Then pull a **distributed trace** for a slow request. The waterfall shows which hop consumed the time — your service, a downstream, or the database. From there it's usually one of a short list: an N+1 query, a missing index, connection-pool exhaustion, a downstream call with no timeout, or GC pressure. Only once you've narrowed that far is a **thread dump** worth taking, to see where threads are actually parked. Then change one thing and confirm against the same metric.",
+        explanation: `\`\`\`bash
+# Narrowing down, cheapest signal first — all read-only, all safe on a live pod.
+
+# 1. Is it one endpoint or everything? p99 vs p50 separates "slow for all"
+#    from "slow for some" — a big gap means a subset of requests, e.g. one tenant.
+curl -s localhost:8080/actuator/metrics/http.server.requests | jq
+
+# 2. Connection pool: threads waiting here while CPU is idle = pool exhaustion,
+#    the single most common cause of "the whole app got slow at once".
+curl -s localhost:8080/actuator/metrics/hikaricp.connections.pending | jq
+
+# 3. GC: rising pause time with a full heap points at memory, not the database.
+curl -s localhost:8080/actuator/metrics/jvm.gc.pause | jq
+
+# 4. Only now, and only if the above didn't answer it — where are threads stuck?
+jcmd 1 Thread.print > /tmp/threads.txt     # or /actuator/threaddump if exposed
+\`\`\`
+
+**Read the thread dump for patterns, not individual threads.** Fifty threads parked in \`SocketRead\` on the same downstream host means that dependency is slow and you're missing a timeout. Fifty in \`HikariPool.getConnection\` means the pool is exhausted — and the fix is usually a slow query holding connections, not a bigger pool. Threads in \`synchronized\` blocks on one monitor means lock contention. Take **two or three dumps a few seconds apart**: threads present in all of them are genuinely stuck, where a single dump can't distinguish stuck from merely busy.
+
+**Profiling a live JVM safely.** \`jcmd\` thread dumps are cheap and safe. **Java Flight Recorder** is designed for production, typically under 2% overhead — \`jcmd 1 JFR.start duration=60s filename=/tmp/rec.jfr\` gives you allocation, lock, and CPU profiles you open later in JDK Mission Control. What you don't do is attach a sampling profiler with high overhead, enable DEBUG logging fleet-wide, or take a **heap dump** on a large heap, since that pauses the JVM for seconds and writes gigabytes. If you need a heap dump, take it from **one pod pulled out of the load balancer**, which is exactly what readiness probes let you do.`,
         followUps: [
           { text: "What metrics and logs would you check first?" },
           { text: "How do distributed traces help isolate the slow hop?" },
@@ -5715,6 +6518,42 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 150,
         text: "How do you ensure data consistency when multiple services update related data?",
+        answer: "You accept that a single ACID transaction can't span services and design for **eventual consistency** instead. Each service commits **its own local transaction** and publishes an event; the others react. Two patterns make that reliable. The **transactional outbox** writes the event to a table in the same transaction as the business change, and a relay publishes it after commit. So you can never save the order and lose the event, or publish an event for an order that rolled back. **Idempotent consumers** handle the other half, because at-least-once delivery guarantees duplicates. For a multi-step process use a **saga** with compensating transactions, and avoid 2PC — it holds locks across the network and most things you integrate with don't support XA.",
+        explanation: `\`\`\`java
+// BROKEN — two systems, no shared transaction. Crash between them and you
+// have an order nobody was told about, or an event for an order that rolled back.
+@Transactional
+public Order place(OrderRequest req) {
+    Order order = orderRepository.save(new Order(req, PENDING));
+    kafka.send("orders", new OrderPlaced(order.getId()));   // NOT part of the tx
+    return order;
+}
+\`\`\`
+
+\`\`\`java
+// OUTBOX — the event is a ROW, written in the same transaction as the order.
+// Either both commit or neither does; there is no window in between.
+@Transactional
+public Order place(OrderRequest req) {
+    Order order = orderRepository.save(new Order(req, PENDING));
+    outboxRepository.save(new OutboxEvent("OrderPlaced", order.getId(), toJson(order)));
+    return order;
+}
+
+// A relay publishes committed rows afterwards and marks them sent. If it crashes
+// mid-publish it republishes — at-least-once, which is why consumers must dedupe.
+@Scheduled(fixedDelay = 500)
+public void relay() {
+    for (OutboxEvent e : outboxRepository.findUnpublished(100)) {
+        kafka.send(e.getTopic(), e.getPayload());
+        e.markPublished();
+    }
+}
+\`\`\`
+
+**Strong versus eventual consistency.** **Strong** means every read sees the latest write — what a single database gives you inside a transaction. It's the right model where a stale read is genuinely unsafe: an account balance during a withdrawal, a seat inventory, an authorization check. **Eventual** means replicas converge given time, with a window where different services disagree. That's acceptable far more often than people expect — an order confirmation email arriving 200ms after the order, a search index updating in a second. The design question isn't which is better, it's **how long a window the business can tolerate**, and making that window visible in the UI (\"processing\") rather than pretending it doesn't exist.
+
+**When a saga beats 2PC.** Effectively always across services. 2PC holds locks through a network round trip so throughput collapses under contention, the coordinator is a single point of failure that can leave participants stuck in-doubt, and it needs XA support from every participant — which rules out Kafka, REST APIs, Stripe, and most NoSQL. A saga keeps each transaction **local, short, and independently committable**, paying for it with visible intermediate states and compensating transactions you have to write yourself. Inside one service and one database, a plain \`@Transactional\` is still the right answer — don't reach for a saga where a transaction works.`,
         followUps: [
           { text: "What consistency models exist (strong, eventual)?" },
           { text: "How do outbox pattern and idempotent consumers help?" },
@@ -5724,6 +6563,42 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 151,
         text: "What is asynchronous processing in Spring Boot (`@Async`), and when would you use it?",
+        answer: "`@Async` makes a method return immediately and run on **another thread** from a pool. You put `@EnableAsync` on a config class, annotate the method, and return `void` or `CompletableFuture<T>`. Use it for genuinely fire-and-forget work inside one service — sending an email, writing an audit record, warming a cache — so the HTTP thread isn't held waiting. Two limits matter. It's **proxy-based**, so calling it from another method of the same class does nothing at all, exactly like `@Transactional`. And you should **define your own executor** rather than trusting the default, sizing the pool and queue deliberately. If the work must survive a restart, use a **message queue** instead: an in-memory pool loses the task when the pod dies.",
+        explanation: `\`\`\`java
+@Configuration
+@EnableAsync
+public class AsyncConfig {
+
+    @Bean("notificationExecutor")
+    public Executor notificationExecutor() {
+        ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
+        ex.setCorePoolSize(4);
+        ex.setMaxPoolSize(8);
+        ex.setQueueCapacity(100);              // bounded! an unbounded queue hides overload
+        ex.setThreadNamePrefix("notify-");     // so thread dumps are readable
+        // Queue full: run on the CALLER's thread. Slows the caller, but never drops work.
+        ex.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        return ex;
+    }
+}
+
+@Service
+public class OrderService {
+
+    @Async("notificationExecutor")   // name the executor — don't rely on the default
+    public void sendConfirmation(Long orderId) { /* runs off the HTTP thread */ }
+
+    public Order place(OrderRequest req) {
+        Order order = repository.save(new Order(req));
+        this.sendConfirmation(order.getId());   // BUG: self-invocation, runs SYNCHRONOUSLY
+        return order;                            // no proxy in the path, so no @Async
+    }
+}
+\`\`\`
+
+**The limitations, stated plainly.** Self-invocation silently degrades to a normal blocking call — no error, so it looks like it works. The return type must be \`void\` or \`CompletableFuture\` (or \`Future\`); anything else returns \`null\` immediately. Exceptions are the sharpest edge: in a \`void\` async method an exception **vanishes** unless you register an \`AsyncUncaughtExceptionHandler\`, so failures disappear entirely. With \`CompletableFuture\` the exception surfaces when somebody calls \`get()\` — and if nobody does, it's lost the same way. Security and request context don't propagate to the new thread by default either, so \`SecurityContextHolder\` is empty unless you configure the delegating executor.
+
+**When to use a queue instead.** \`@Async\` state lives in your JVM's heap, so a restart, a deploy, or an OOM **loses every queued task with no record it existed**. That's fine for a cache warm-up and unacceptable for a payment confirmation. Use a broker when the work must survive a crash, needs retries with backoff and a dead-letter queue, should be spread across instances, or has to be observable. \`@Async\` is right for short, cheap, best-effort work inside one process — nothing more.`,
         followUps: [
           { text: "How do you configure the executor for `@Async` methods?" },
           { text: "What are the limitations of `@Async` (proxy, return types, error handling)?" },
@@ -5733,6 +6608,41 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 152,
         text: "How do you schedule recurring tasks in Spring Boot (`@Scheduled`)?",
+        answer: "Put `@EnableScheduling` on a config class and `@Scheduled` on a **no-argument** method. Three timing modes. **`fixedRate`** starts every N milliseconds regardless of how long the last run took, and **`fixedDelay`** waits N milliseconds *after* the previous run finishes. **`cron`** takes a calendar expression like `0 0 2 * * *` for 2am daily. The default scheduler is **single-threaded**, so one slow job delays every other job in the application. The trap that actually bites in production is that in a **multi-instance deployment every instance runs the job** — a nightly billing run fires three times. Guard it with **ShedLock** or a database lock so only one instance wins.",
+        explanation: `\`\`\`java
+@Component
+public class ReportJobs {
+
+    // fixedDelay: waits 60s AFTER the previous run ENDS. Runs never overlap.
+    @Scheduled(fixedDelay = 60_000)
+    public void pollInbox() { }
+
+    // fixedRate: starts every 60s NO MATTER WHAT. If a run takes 90s, the next
+    // one is already due — with a bigger pool they overlap and double-process.
+    @Scheduled(fixedRate = 60_000)
+    public void publishMetrics() { }
+
+    // cron: second minute hour day month weekday. 2am daily, in an EXPLICIT zone —
+    // without it you get the server's zone, which shifts twice a year on DST.
+    @Scheduled(cron = "0 0 2 * * *", zone = "Europe/London")
+    @SchedulerLock(name = "nightlyBilling", lockAtMostFor = "30m")   // ShedLock
+    public void nightlyBilling() { }   // exactly ONE instance runs this
+}
+\`\`\`
+
+\`\`\`yaml
+# The default scheduler pool size is 1 — one slow job blocks every other job.
+spring:
+  task:
+    scheduling:
+      pool:
+        size: 4
+      thread-name-prefix: sched-
+\`\`\`
+
+**Preventing overlap.** \`fixedDelay\` prevents it by construction within one instance, since the next run is measured from the end of the last. \`fixedRate\` and \`cron\` do not — with a pool size above 1 a long-running job can be re-entered while still working, which double-processes rows. Guard those with a lock, or make the job **idempotent** so a second concurrent run is harmless. ShedLock's \`lockAtMostFor\` matters here too: it's a safety net so a job whose instance dies mid-run doesn't hold the lock forever.
+
+**Multi-instance is where naive scheduling breaks.** Three replicas means three executions of the same cron — three invoice runs, three sets of emails. **ShedLock** is the light answer: it takes a row-level lock in your existing database or Redis, and only the winner executes. **Quartz** in clustered mode is the heavier one, and it earns its place when you need persistent job state, misfire handling, or dynamic scheduling at runtime. For anything genuinely important, the strongest option is to take it out of the app entirely — a **Kubernetes CronJob** running a separate pod gives you isolation, its own resource limits, retries, and a run history you can inspect, none of which \`@Scheduled\` provides.`,
         followUps: [
           { text: "What is the difference between fixedRate, fixedDelay, and cron?" },
           { text: "How do you prevent overlapping executions of the same job?" },
@@ -5751,6 +6661,31 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 153,
         text: "Walk me through a project you built end-to-end using Spring Boot.",
+        answer: "Keep it to about two minutes with a fixed shape: **what the system did and who used it**, **which part was yours**, **the stack and why**, then **one problem worth talking about**. Lead with the business purpose rather than the dependency list. \"An order service that took checkout requests and coordinated payment and inventory\" tells an interviewer far more than a stack list. Say what *you* built rather than what the team shipped, because the next question is always about your specific contribution. Have one real number ready: requests per day, table size, p95 latency, team size. Finish with something you'd do differently, which reads as judgement rather than weakness.",
+        explanation: `This is your own project, so the content has to be yours — what follows is the **shape** to pour it into, not a script to memorise.
+
+\`\`\`text
+1. CONTEXT   (20s)  What it did, who used it, why it existed.
+                    "Internal order service for a retail site — took checkout
+                     requests, coordinated payment and inventory, ~40k orders/day."
+
+2. YOUR PART (30s)  Concretely what you owned. Not "we built" — "I built".
+                    "I owned the order lifecycle and the payment integration.
+                     Two other devs did the fulfilment side."
+
+3. STACK     (20s)  Choices AND reasons. A reason beats a longer list.
+                    "Boot 3, Postgres, Kafka for events. Kafka rather than REST
+                     because three teams needed the same order events."
+
+4. PROBLEM   (40s)  One thing that was genuinely hard, and how you worked it out.
+                    This is the part they're actually listening to.
+
+5. HINDSIGHT (10s)  One thing you'd change, with the reason.
+\`\`\`
+
+**Answering the three sub-questions well.** For **your contribution versus the team's**, be precise and honest — inflating scope collapses the moment they ask a detailed question about a part you didn't write, and "I owned X, and Y was someone else's" reads as confident, not diminished. For **architecture decisions**, give the trade-off rather than the conclusion: "we used a database table for the job queue instead of Kafka because we had one consumer and no ops budget for a broker" shows reasoning where "we used Kafka" shows a noun. For **auth, data, and deployment**, have one sentence each ready — JWT validated at the gateway, Postgres with Flyway migrations, Docker image deployed to Kubernetes via GitHub Actions — since that trio is the fastest way for an interviewer to check you saw a system end-to-end.
+
+**On the "what would you change" question:** pick something real and technical with a reason attached — "we put too much in one service and the deploy coupling hurt", or "we should have added tracing on day one instead of after the first incident". Avoid both fake humility ("I'd have written more tests") and anything that suggests you didn't understand the problem at the time.`,
         followUps: [
           { text: "What was your specific contribution vs the team's?" },
           { text: "What architecture decisions did you make, and what would you change?" },
@@ -5760,6 +6695,31 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 154,
         text: "Describe a challenging bug you fixed in production — how did you diagnose it?",
+        answer: "Use **STAR** — situation, task, action, result — and spend most of it on the action. What's being assessed is your **diagnostic method**, not how clever the fix was. So walk the path: the symptom, the first signal you looked at, what you ruled out, and how you *confirmed* the cause instead of guessing. Say explicitly how you **stopped the bleeding** while still investigating — a rollback, a feature flag, scaling up. Mitigating before root-causing is the instinct that separates people who've been on call. Close with the result as a number if you have one, and what you changed so it can't recur: a test, an alert, a timeout.",
+        explanation: `The bug has to be yours. This is the **structure** that makes a real one land, and the trap is spending three minutes on the symptom and ten seconds on the reasoning.
+
+\`\`\`text
+SITUATION  "Checkout p99 went from 300ms to 12s, only during morning peak,
+            starting two days after a release."
+TASK       "I picked it up as the on-call dev."
+ACTION     - Metrics first: latency was up, CPU was flat. That ruled out our code
+             being slow and pointed at waiting on something.
+           - hikaricp.connections.pending was climbing -> pool exhaustion.
+           - Thread dump: 40 threads parked in getConnection.
+           - Ruled out traffic (volume was normal) and the DB (CPU fine).
+           - Found a new endpoint holding a connection across an HTTP call
+             to a slow third party.
+MITIGATION  Feature-flagged the endpoint off, latency recovered in minutes,
+            THEN kept digging.
+RESULT      "Moved the external call outside the transaction, p99 back to 320ms.
+             Added an alert on pending connections and a timeout on that client."
+\`\`\`
+
+**On tools and signals**, name the specific thing you looked at and what it told you — "CPU was flat while latency climbed, which meant we were waiting, not computing" is a sentence that demonstrates reasoning. Metrics dashboards, distributed traces, thread dumps, GC logs, and the query log are the usual cast. Saying "I added logging and eventually found it" is honest but weak; if that's genuinely what happened, describe **how you narrowed where to add it**.
+
+**On mitigation**, the point being tested is whether you know that restoring service and understanding the cause are two different jobs with different urgency. Rollback, feature flag, scale out, disable the endpoint, fail over — any of them, as long as you did it *before* the root cause was fully understood and can say why that was right.
+
+**On prevention**, keep it proportionate and concrete: the alert that would have caught it 20 minutes earlier, the regression test, the timeout that was missing. Avoid grand process proposals — "we introduced a full incident review process" from one bug sounds invented. One specific, well-chosen change is more convincing than a policy.`,
         followUps: [
           { text: "What tools and signals led you to the root cause?" },
           { text: "How did you mitigate impact while investigating?" },
@@ -5769,6 +6729,26 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 155,
         text: "How do you approach code reviews, and what do you look for?",
+        answer: "Read for **correctness first, then security, then readability** — in that order, because a beautifully formatted race condition is still a bug. Concretely: does it handle the null and empty cases, is there a test covering the behaviour that changed, does it log PII or leak a credential, is there an N+1 query. Leave **formatting to the toolchain** rather than to review comments. Phrase feedback as a question when you might be missing context: \"what happens if this list is empty?\". Mark clearly what's blocking versus a suggestion, so the author knows what actually stops the merge. And review **quickly**: a PR sitting for two days costs the team more than most comments save.",
+        explanation: `\`\`\`text
+Order matters — read for these in sequence, not all at once:
+
+1. CORRECTNESS   Does it do what the ticket says? Null/empty/boundary cases?
+                 Is there a test for the behaviour that CHANGED?
+                 Concurrency: shared mutable state, non-atomic check-then-act?
+2. SECURITY      Secrets in code or logs? PII in logs? Input validated?
+                 Authorization checked at the service, not just the controller?
+                 SQL built by string concatenation?
+3. PERFORMANCE   N+1 query? Missing index on a new lookup column?
+                 Unbounded collection or query with no pagination?
+4. READABILITY   Will someone understand this in six months? Names accurate?
+                 Is the complexity essential or accidental?
+5. STYLE         Leave it to Spotless/Checkstyle. Don't spend human review on it.
+\`\`\`
+
+**Giving feedback without blocking the team.** Separate the blocking from the optional explicitly — many teams prefix with \`nit:\` for "take it or leave it" — because an author who can't tell which comments are mandatory either argues about all of them or silently accepts all of them. Ask rather than assert when you might lack context: "what happens if this list is empty?" invites an answer where "this will NPE" is wrong if there's a guard you missed. Comment on the **code, not the person**. And weigh the cost of delay: for a small fix, approving with a comment beats another round trip. If a PR needs a real redesign, that's a five-minute conversation, not fifteen review comments.
+
+**Handling disagreement.** State the concern once with a reason, and hear the response properly — the author has usually thought about it and may know a constraint you don't. If it's genuinely important and you still disagree, take it out of the comment thread to a call, because text makes technical disagreement feel more adversarial than it is. Escalate to a third person on the team when you're deadlocked, which is normal rather than a failure. The thing to avoid is a review thread with fifteen replies: past two or three exchanges, the medium has stopped working. And be willing to be wrong out loud — "fair enough, you're right about the ordering" is cheap and builds a lot of trust.`,
         followUps: [
           { text: "How do you give constructive feedback without blocking the team?" },
           { text: "What correctness, security, and readability checks do you prioritize?" },
@@ -5778,6 +6758,31 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 156,
         text: "Tell me about a time you had to optimize a slow-performing API or query.",
+        answer: "The structure is **measure, find the real bottleneck, fix one thing, measure again**. Open with a number, because \"it felt slow\" isn't a baseline and you can't demonstrate an improvement without one — p95 latency from Actuator or your APM works. Most Spring Boot slowness lives in the data layer, so check the **N+1 query** first by counting queries per request, then a missing index with `EXPLAIN ANALYZE`. Fix the cheapest real cause: a join fetch, an index, a projection that stops loading columns nobody uses. Reach for caching **after** the query is sane, not instead of fixing it — caching a bad query just hides it. Then state the after-number and what the fix cost you.",
+        explanation: `\`\`\`sql
+-- The measurement that usually finds it. Run the real query with real data volumes;
+-- a plan against 50 test rows tells you nothing about production.
+EXPLAIN ANALYZE
+SELECT * FROM orders WHERE customer_id = 42 AND status = 'PENDING';
+
+-- Seq Scan on orders  (cost=0.00..18400 rows=1 width=284)
+--   Filter: ((customer_id = 42) AND (status = 'PENDING'))
+--   Rows Removed by Filter: 847213          <-- reading 847k rows to return 1
+-- Planning Time: 0.1 ms
+-- Execution Time: 412 ms
+
+CREATE INDEX CONCURRENTLY idx_orders_customer_status ON orders(customer_id, status);
+-- CONCURRENTLY: doesn't lock writes on a live table. Slower to build, no outage.
+
+-- Index Scan using idx_orders_customer_status  (cost=0.42..8.44 rows=1)
+-- Execution Time: 0.3 ms                      <-- 412ms -> 0.3ms
+\`\`\`
+
+**Measuring before and after.** Same endpoint, same data volume, same percentile — and prefer **p95 or p99 over the mean**, because an average hides exactly the slow tail users complain about. For a query, \`EXPLAIN ANALYZE\` gives you a real number and, more usefully, the *reason*: a sequential scan, a nested loop over a large set, a sort spilling to disk. For an endpoint, \`http.server.requests\` before and after a deploy is the honest comparison. Watch the **query count** too, not just total time — 200 fast queries is an N+1 and no index will fix it.
+
+**Which fix, in which order.** Fix the **query** first: an N+1 resolved with a join fetch or an \`@EntityGraph\`, a missing index, a projection that stops loading a 2MB blob column you never read. Then **pagination**, since an endpoint returning 50,000 rows is slow no matter how good the index is. **Caching** comes after that — it's the right answer for genuinely hot, rarely-changing, expensive-to-compute data, and the wrong answer as a substitute for an index. **Architecture** changes (read replicas, denormalisation, a search index) come last because they cost the most.
+
+**Name the trade-off, because every optimisation has one.** An index costs write throughput and disk. A cache costs staleness and invalidation complexity. Denormalisation costs consistency. A join fetch can produce a cartesian product if you fetch two collections at once. An interviewer asking this question is usually listening for whether you know what you gave up.`,
         followUps: [
           { text: "How did you measure before and after?" },
           { text: "Was the fix caching, indexing, query rewrite, or architecture?" },
@@ -5787,6 +6792,23 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 157,
         text: "How do you keep yourself updated with new Spring/Java features?",
+        answer: "Name **specific, checkable sources** rather than \"I read blogs\": the Spring Boot **release notes and migration guides** on GitHub, the official Spring blog, the JEP list for each new Java release, and something with editorial depth like Baeldung or InfoQ. The stronger half of the answer is **how you use them**. Read the release notes for the version you're actually on, so you learn what's deprecated before it's removed rather than during an upgrade. Then give one concrete thing you adopted and why it mattered: records for DTOs, `RestClient` replacing `RestTemplate`, virtual threads. For upgrades at work the honest process is: read the migration guide, bump in a branch, let the test suite find the breakage. Move one major version at a time.",
+        explanation: `\`\`\`text
+Worth knowing as current, because these are what interviewers probe:
+
+Java 17 -> 21   records, sealed types, pattern matching for switch,
+                text blocks, virtual threads (21)
+Boot 3.0        Jakarta EE (javax.* -> jakarta.*), Java 17 baseline,
+                spring.factories removed for auto-config
+Boot 3.1        Testcontainers @ServiceConnection, Docker Compose support
+Boot 3.2        RestClient; virtual thread support (spring.threads.virtual.enabled)
+Boot 3.4        @MockBean/@SpyBean deprecated -> @MockitoBean/@MockitoSpyBean
+Spring Cloud    Ribbon/Hystrix/Zuul gone; Sleuth -> Micrometer Tracing (Boot 3)
+\`\`\`
+
+**Answer the sub-questions with substance.** For **resources**, the specific beats the generic: "the Boot release notes on the GitHub wiki" is checkable, "various blogs" isn't. Release notes and migration guides are genuinely the highest-value source, because they tell you what *changed*, which is what actually costs you time. For **something you adopted**, pick a real one and give the reason: records for DTOs removes fifty lines of boilerplate per class; \`RestClient\` because \`RestTemplate\` is in maintenance; \`@ServiceConnection\` because it deleted the \`@DynamicPropertySource\` boilerplate from every integration test. Don't claim virtual threads in production unless you can discuss pinning and what happens with \`synchronized\` blocks.
+
+**On evaluating a major upgrade at work**, the credible answer is procedural rather than heroic. Read the migration guide and the deprecations first. Do it in a branch and let the test suite tell you what broke — which is the real argument for having one. Go **one major version at a time** (2.7 → 3.0 → 3.1, not 2.5 → 3.2), since the guides are written pairwise. Check that your dependencies support the target before starting, because a library that never made the Jakarta namespace move is a blocker no amount of your own effort fixes. And time it deliberately: the strongest reason to upgrade is usually **end of security support** for your current version, which turns it from a nice-to-have into a date on the calendar.`,
         followUps: [
           { text: "What resources do you follow (docs, blogs, release notes)?" },
           { text: "Have you adopted a recent Java or Spring feature in a project?" },
@@ -5796,6 +6818,34 @@ The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a 
       {
         id: 158,
         text: "Describe a situation where you disagreed with a technical decision — how did you handle it?",
+        answer: "What's being assessed is whether you can **disagree on evidence and then commit to the outcome**. The shape is: state the concern once and clearly, with something concrete behind it — a benchmark, a spike, a specific failure mode you can name, not a preference. Then listen to the counter-argument properly, because the other person usually knows a constraint you don't. If the team goes the other way, **commit fully** and help make it work rather than relitigating it in standups. Say what you'd watch for so you'd know early whether the concern was real. And if you turned out to be wrong, say so — that's the strongest version of this answer, not the weakest.",
+        explanation: `The situation has to be yours. The pattern below is what makes a real one land, and the failure mode is telling a story where you were right and everyone else eventually admitted it.
+
+\`\`\`text
+CONCERN     Stated once, specifically, with a mechanism — not a preference.
+            WEAK   "I didn't think MongoDB was the right choice."
+            STRONG "Our access pattern was relational — four joins on the main
+                    query — and we'd lose transactional consistency across them."
+
+EVIDENCE    A spike, a benchmark, a prototype, a named failure mode.
+            "I spent half a day modelling it both ways and showed the query
+             we'd have to write by hand in Mongo."
+
+LISTEN      What constraint did they have that you didn't see?
+            Time pressure, team skills, an existing ops contract.
+
+OUTCOME     They chose differently -> you commit, properly.
+            "I wrote the repository layer for it and made sure we had the
+             integration tests to catch the consistency issues I'd worried about."
+
+FOLLOW-UP   What you'd watch to find out who was right, and what happened.
+\`\`\`
+
+**Presenting alternatives with data.** A prototype ends more arguments than an opinion does, and it's usually cheaper than the debate it replaces — half a day of spiking beats three meetings. Where you can't measure, name the **specific failure mode** rather than a general worry: "if the payment provider is slow, this holds a DB connection for the whole call and exhausts the pool" is arguable in a way that "this feels fragile" isn't. Write it down for anything significant, even a short decision record, so the reasoning survives the meeting.
+
+**When the team chooses differently**, the answer interviewers are listening for is genuine commitment — you helped make it succeed rather than waiting to be proven right. Say what you did to de-risk the path you disagreed with: tests around the part that worried you, a metric or alert on the failure mode, a documented note on what would trigger revisiting. That's the professional version of disagree-and-commit, and it also gives the story a real ending.
+
+**On what you learned about communication:** the useful, non-generic lessons are usually about **timing and audience** — raising it before the decision hardened rather than after, taking it to a call once text started going in circles, or framing the concern in terms of what the business cared about (downtime, delivery date) rather than technical elegance. Avoid a lesson that's really a complaint about someone else.`,
         followUps: [
           { text: "How did you present alternatives with data or prototypes?" },
           { text: "What did you do when the team chose a different path?" },
