@@ -15,6 +15,10 @@ import { followupAnswersSpringCore } from "./followup_answers_spring_core";
 import { followupAnswersSpringBoot } from "./followup_answers_spring_boot";
 import { followupAnswersSecurity } from "./followup_answers_security";
 import { followupAnswersMicroservices } from "./followup_answers_microservices";
+import { followupAnswersTesting } from "./followup_answers_testing";
+import { followupAnswersBuildGit } from "./followup_answers_build_git";
+import { followupAnswersSystemDesign } from "./followup_answers_system_design";
+import { followupAnswersBehavioral } from "./followup_answers_behavioral";
 
 const baseAnswers: Record<string, string> = {
   // ===================== Q1: == vs equals =====================
@@ -380,4 +384,8 @@ export const followupAnswers: Record<string, string> = {
   ...followupAnswersSpringBoot,
   ...followupAnswersSecurity,
   ...followupAnswersMicroservices,
+  ...followupAnswersTesting,
+  ...followupAnswersBuildGit,
+  ...followupAnswersSystemDesign,
+  ...followupAnswersBehavioral,
 };

@@ -33,6 +33,10 @@ content file** and **a set of answer-bank files**; everything else is layout.
 | `src/data/followup_answers_jpa.ts` | Bank — `spring-data-jpa` (Q84–Q102) |
 | `src/data/followup_answers_security.ts` | Bank — `security` (Q103–Q112) |
 | `src/data/followup_answers_microservices.ts` | Bank — `microservices` (Q113–Q124) |
+| `src/data/followup_answers_testing.ts` | Bank — `testing` (Q125–Q132) |
+| `src/data/followup_answers_build_git.ts` | Bank — `build-git` (Q133–Q142) |
+| `src/data/followup_answers_system_design.ts` | Bank — `system-design` (Q143–Q152) |
+| `src/data/followup_answers_behavioral.ts` | Bank — `behavioral` (Q153–Q158). Structure/criteria, not scripted stories — see the file header. |
 | `src/data/types.ts` | `Category`, `Question`, `FollowUp` interfaces |
 | `src/components/QuestionCard.astro` | Renders a question. Contains the markdown renderer — see §5. |
 
@@ -184,7 +188,7 @@ is correct as-is.
 
 ## 6. Current coverage
 
-158 questions, 474 follow-ups, **372 answered / 102 missing** (as of last edit).
+158 questions, 474 follow-ups, **474 answered / 0 missing** — all 12 categories complete.
 
 | Category | Range | Qs | main answer | explanation | follow-up answers |
 |---|---|---|---|---|---|
@@ -196,10 +200,10 @@ is correct as-is.
 | `spring-data-jpa` | Q84–Q102 | 19 | 19/19 | 19/19 | 57/57 |
 | `security` | Q103–Q112 | 10 | 10/10 | 10/10 | 30/30 |
 | `microservices` | Q113–Q124 | 12 | 12/12 | 12/12 | 36/36 |
-| `testing` | Q125–Q132 | 8 | **0/8** | **0/8** | **0/24** |
-| `build-git` | Q133–Q142 | 10 | **0/10** | **0/10** | **0/30** |
-| `system-design` | Q143–Q152 | 10 | **0/10** | **0/10** | **0/30** |
-| `behavioral` | Q153–Q158 | 6 | **0/6** | **0/6** | **0/18** |
+| `testing` | Q125–Q132 | 8 | 8/8 | 8/8 | 24/24 |
+| `build-git` | Q133–Q142 | 10 | 10/10 | 10/10 | 30/30 |
+| `system-design` | Q143–Q152 | 10 | 10/10 | 10/10 | 30/30 |
+| `behavioral` | Q153–Q158 | 6 | 6/6 | 6/6 | 18/18 |
 
 **Worked example of the §3.1 key-drift bug (now fixed).** Six `core-java`
 follow-ups on Q17/Q18 rendered blank even though their answers existed in
@@ -218,7 +222,7 @@ needed rewriting. **Check that a stranded answer still answers the current
 question before re-keying it** — an orphan can mean either drift or replacement,
 and only the verification script tells you it exists at all.
 
-Four categories have **nothing at all** — each needs a new bank file per §4.
+Every category now has a bank file wired into `followup_answers.ts` (import **and** spread).
 
 ---
 
