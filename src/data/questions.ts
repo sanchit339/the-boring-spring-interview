@@ -3641,7 +3641,7 @@ public Page<Order> list(@PageableDefault(size = 20, sort = "createdAt") Pageable
         id: 84,
         text: "What is Spring Data JPA, and how does it simplify database access?",
         answer:
-          "Spring Data JPA is a Spring abstraction layer over JPA that **generates repository implementations at startup** from interfaces you declare — no DAO boilerplate. You extend `JpaRepository<User, Long>` and get `save`, `findById`, `findAll`, pagination, sorting, and derived query methods for free. It parses the method name — `findByEmailAndActiveTrue` becomes a query with no body to write. Reach past it with `@Query` when the derived name gets unreadable, and drop to JDBC or a DTO projection when you need a shape JPA can't express cheaply.",
+          "**Spring Data JPA** is a Spring layer over JPA that **generates the repository implementation at startup** from an interface you declare — you write no DAO code. You extend `JpaRepository<User, Long>` and get `save`, `findById`, and paging for free. It also **derives queries from method names** — `findByEmailAndActiveTrue` becomes a real query with no body written. That covers most of what an app needs, but not everything. Once the derived name gets unreadable, you switch to `@Query` and write the JPQL yourself. And if you only need three columns out of a twenty-column entity, a **DTO projection** keeps you from loading whole objects you'll throw away.",
         explanation: `The pain without it is real. Plain JPA looks like this:
 
 \`\`\`java
@@ -3681,7 +3681,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
         id: 85,
         text: "What is the difference between JPA, Hibernate, and Spring Data JPA?",
         answer:
-          "**JPA** is a specification (`jakarta.persistence.*`) — an interface contract for ORM in Java, not an implementation. **Hibernate** is the most popular *implementation* of JPA, providing the actual SQL generation, session management, and caching. **Spring Data JPA** sits on top and auto-generates repository implementations that drive Hibernate through the JPA API. Remove any one layer and the stack changes: JPA without Hibernate means finding another provider; without Spring Data JPA you write DAOs manually.",
+          "**JPA** is a specification — `jakarta.persistence.*`, an interface contract for ORM in Java with no code that actually runs. **Hibernate** is the implementation behind it, and it does the real work: generating the SQL, managing the session, handling the caching. **Spring Data JPA** sits one layer above and writes your repositories for you, driving Hibernate through the JPA API. So the annotations on your entity come from JPA, the SQL in your logs comes from Hibernate, and the `UserRepository` interface with no body comes from Spring Data. Swap Hibernate for EclipseLink and your `@Entity` classes don't change — that's the whole point of coding against the spec.",
         explanation: `Think of it as three layers:
 
 \`\`\`
@@ -3711,7 +3711,7 @@ A real example: you call \`userRepository.findByEmail(email)\`. **Spring Data JP
         id: 86,
         text: "What is the difference between `JpaRepository`, `CrudRepository`, and `PagingAndSortingRepository`?",
         answer:
-          "`CrudRepository` provides the 7 core CRUD methods. `PagingAndSortingRepository` adds `findAll(Pageable)` and `findAll(Sort)` — note that since **Spring Data 3.0 it no longer extends `CrudRepository`**; the two are independent. `JpaRepository` extends both branches and adds JPA-specific methods: `flush`, `saveAndFlush`, batch deletes, and — crucially — returns `List<T>` instead of `Iterable<T>`. Always extend `JpaRepository` in production; you'll eventually need pagination or flush control and retrofitting costs refactors.",
+          "`CrudRepository` is the base — 7 methods, `save`, `findById`, `delete` and the rest. `PagingAndSortingRepository` adds `findAll(Pageable)` and `findAll(Sort)` on top of that. One thing catches people out: since **Spring Data 3.0** it no longer extends `CrudRepository`, so the two are separate branches now. `JpaRepository` extends both and adds the JPA-specific pieces — `flush`, `saveAndFlush`, batch deletes — and it returns `List<T>` where the others return `Iterable<T>`. In practice you extend `JpaRepository` and stop thinking about it. You'll want paging or a flush eventually, and switching the interface later means touching every caller that relied on `Iterable`.",
         explanation: `The hierarchy:
 
 \`\`\`
@@ -3756,7 +3756,7 @@ users.stream()...  // works
         id: 87,
         text: "How do you write custom queries using `@Query`?",
         answer:
-          "`@Query` lets you write JPQL (or native SQL) directly on a repository method when derived query names become unreadable or the query requires JOINs, subqueries, or aggregations that Spring can't derive from a method name. Annotate `@Modifying` + `@Transactional` for any DML query — without both, updates and deletes throw at runtime.",
+          "`@Query` lets you write the query yourself, right on the repository method, instead of having Spring derive it from the method name. You reach for it when the derived name would be unreadable, or when the query needs a join, a subquery, or an aggregation that no method name can express. It takes **JPQL** by default, or real SQL if you set `nativeQuery = true`. There's one rule you can't skip. Any query that writes needs both **`@Modifying`** and **`@Transactional`** on it. Leave `@Modifying` off and Hibernate tries to run your `UPDATE` through `executeQuery` and throws; leave the transaction off and you get `TransactionRequiredException` instead.",
         explanation: `\`\`\`java
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
@@ -3791,7 +3791,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         id: 88,
         text: "What is the difference between derived query methods and `@Query` annotated methods?",
         answer:
-          "**Derived methods** have their JPQL generated by Spring from the method name at startup — `findByEmailAndStatus` becomes `WHERE email = ? AND status = ?` automatically. **`@Query` methods** let you write the query explicitly, giving you full JPQL/SQL control. Derived methods win for simple lookups (1-2 conditions); `@Query` wins the moment a join, subquery, or aggregation is involved.",
+          "**Derived methods** get their JPQL generated by Spring from the method name at startup — `findByEmailAndStatus` becomes `WHERE email = ? AND status = ?` with nothing for you to write. **`@Query` methods** are the opposite: you write the JPQL or SQL explicitly and Spring just runs it. The line between them is about complexity, not preference. Derived names are fine for one or two conditions. Once you need a join, a subquery, or an aggregation, the method name grows into forty characters nobody can read — that's the point where you switch to `@Query`.",
         explanation: `Spring's name parser works by stripping the prefix (\`findBy\`, \`existsBy\`, \`countBy\`, \`deleteBy\`) and tokenizing the rest using camelCase boundaries against your entity's field names:
 
 \`\`\`java
@@ -3829,7 +3829,7 @@ List<Order> findComplexOrders(...);
         id: 89,
         text: "What is the N+1 select problem, and how do you solve it?",
         answer:
-          "N+1 happens when loading a list of N entities triggers N **additional queries** to load their associations — one query to fetch the parent list, then one per row to fetch the child. Load 50 orders and you silently fire 51 queries to the DB instead of 1. The fix depends on what you actually need:\n\n- `JOIN FETCH` or `@EntityGraph` when you want the full entities in one query.\n- `@BatchSize` for a cheap global reduction — N queries become N/size.\n- A DTO projection for read-only endpoints where you only need a few columns.",
+          "N+1 is when loading a list of N entities fires N **extra queries** to load their associations — one query for the parent list, then one more per row for the children. Load 50 orders, touch `order.getItems()` in a loop, and you've sent 51 queries instead of 1. Nothing throws an error, it's just slow, which is exactly why it ships to production. The fix depends on what you actually need. If you want the full entities, **`JOIN FETCH`** or **`@EntityGraph`** pulls parent and children in a single query. If it's a read-only endpoint that needs three columns, a **DTO projection** is cheaper still. And **`@BatchSize`** is the low-effort option when you can't restructure the query — it turns N queries into N divided by the batch size.",
         explanation: `The classic scenario: you load orders with their items.
 
 \`\`\`java
@@ -3873,7 +3873,7 @@ For a **read-only endpoint** none of these are ideal — if you only need an ord
         id: 90,
         text: "What is the difference between `FetchType.LAZY` and `FetchType.EAGER`?",
         answer:
-          "`FetchType.LAZY` tells Hibernate to load the association **only when you access it** — a proxy is placed in the field and the SELECT fires on first access. `FetchType.EAGER` loads the association **immediately with the parent entity**, adding a JOIN (or extra SELECT) to every load whether you need the data or not. Default: `@ManyToOne`/`@OneToOne` are EAGER; `@OneToMany`/`@ManyToMany` are LAZY. You should **override `@ManyToOne` to LAZY** in most cases — EAGER defaults are a performance footgun.",
+          "`FetchType.LAZY` tells Hibernate to load the association **only when you touch it** — it puts a proxy in the field and fires the SELECT on first access. `FetchType.EAGER` loads it **immediately with the parent**, adding a join or an extra select to every single load whether you use the data or not. The defaults are what catch people out. `@ManyToOne` and `@OneToOne` are EAGER, while `@OneToMany` and `@ManyToMany` are LAZY. So one `findById` on an entity with three `@ManyToOne` fields quietly drags three more tables along with it. Override `@ManyToOne` to `LAZY` in almost every case, then pull in what you actually need with a `JOIN FETCH` on the query that needs it.",
         explanation: `The EAGER trap in practice:
 
 \`\`\`java
@@ -3915,7 +3915,7 @@ Optional<Order> findWithUser(@Param("id") Long id);
         id: 91,
         text: "Explain the different types of entity relationships (`@OneToOne`, `@OneToMany`, `@ManyToOne`, `@ManyToMany`).",
         answer:
-          "`@OneToOne` — one entity maps to exactly one other (User ↔ UserProfile). `@OneToMany` / `@ManyToOne` — one parent has many children, the child holds the FK (Order has many Items; Item has a `@ManyToOne` to Order). `@ManyToMany` — both sides can have multiple of the other, backed by a join table (Student ↔ Course). The **owning side** (the side without `mappedBy`) controls the FK column — always set both sides of a bidirectional relationship or your FK won't be written.",
+          "`@OneToOne` means one row maps to exactly one other row, like `User` and `UserProfile`. `@OneToMany` and `@ManyToOne` are the two halves of a parent-child pair — an `Order` has many `OrderItem`s, and each item points back with a `@ManyToOne`. The FK column always lives on the child, the `@ManyToOne` side. `@ManyToMany` is when both sides can have many of the other, like `Student` and `Course`, and it needs a join table to hold the pairs. The part that actually bites you is the **owning side**. The side without `mappedBy` is the one Hibernate reads when it writes the FK — so if you add the item to `order.getItems()` and never set `item.setOrder(order)`, the row saves with a null FK and the link is silently lost.",
         explanation: `The bidirectional “mappedBy” confusion is the #1 relationship mistake:
 
 \`\`\`java
@@ -3966,7 +3966,7 @@ order.getItems().add(item); // inverse side — in-memory consistency
         id: 92,
         text: "What is the Hibernate first-level and second-level cache?",
         answer:
-          "The **first-level cache** (L1) is the Hibernate session cache — always on, scoped to one `@Transactional` boundary, so within one transaction `findById(1)` called twice hits the DB once. The **second-level cache** (L2) is optional, shared across sessions and app instances, and requires a provider like Ehcache or Redis. L1 is free and automatic; L2 is an explicit performance optimization with staleness trade-offs you need to own.",
+          "The **first-level cache** is the Hibernate session cache. It's always on, you can't switch it off, and it lives for exactly one transaction. Call `findById(1)` twice in the same `@Transactional` method and the second call never reaches the DB — you get the same object instance back. The **second-level cache** is opt-in, shared across sessions and requests for the whole app, and it needs a provider like Ehcache or Redis wired in. What really separates them is who owns the staleness. L1 can't go stale, because it dies with the transaction. L2 can, so the moment you turn it on you're responsible for evicting entries when another instance updates that row.",
         explanation: `First-level cache — works silently for you:
 
 \`\`\`java
@@ -4005,7 +4005,7 @@ public class Product { ... }
         id: 93,
         text: "What is the difference between `save()`, `saveAndFlush()`, and `persist()`?",
         answer:
-          "Spring Data's `save()` calls `persist()` for new entities (null ID) and `merge()` for detached entities (non-null ID). `saveAndFlush()` does the same then immediately **flushes the session** — forcing the SQL to the DB without waiting for the transaction to commit. `persist()` is raw JPA — it only works on **new transient entities** and makes Hibernate manage that exact object instance. The critical `save()` return value rule: always use the **returned object** — for merge, the returned instance is managed, the argument is not.",
+          "Spring Data's `save()` isn't purely an insert — it checks the ID and calls `persist()` when the entity is new, `merge()` when it already has one. `saveAndFlush()` does the same thing and then **flushes**, pushing the SQL to the DB instead of waiting for commit. You need that when the very next line runs a query that has to see the write. `persist()` is raw JPA and only accepts a **new transient entity** — hand it something detached and it throws. The trap is in `merge()`. It doesn't manage the object you passed in; it copies the state into a managed instance and returns *that* — so keep the return value, or every change you make afterwards goes nowhere.",
         explanation: `The merge return value trap is real:
 
 \`\`\`java
@@ -4048,7 +4048,7 @@ public void auditAndQuery() {
         id: 94,
         text: "What is optimistic locking vs pessimistic locking?",
         answer:
-          "**Optimistic locking** assumes conflicts are rare — it lets transactions proceed without blocking, and checks for conflicts only at commit time using a `@Version` field. If another transaction committed first (version mismatch), it throws `OptimisticLockException` and the caller retries. **Pessimistic locking** assumes conflicts are frequent — it uses a DB-level `SELECT FOR UPDATE` to block other writers immediately. Optimistic is cheaper for low-contention workloads; pessimistic is necessary when you can't afford a retry (inventory decrement, financial writes).",
+          "**Optimistic locking** assumes collisions are rare, so nothing blocks. You add a `@Version` column, and at commit Hibernate checks the version still matches the one you read. If someone else committed first the version has moved, you get an `OptimisticLockException`, and the caller retries the whole operation. **Pessimistic locking** assumes collisions are common, so it takes a real database lock up front with `SELECT ... FOR UPDATE` and makes every other writer wait. Optimistic is the right default for a web app, where two users editing the same row in the same instant is unusual. Go pessimistic when a retry isn't acceptable or contention is constant — decrementing the last item in stock, or moving money between two accounts.",
         explanation: `Optimistic locking with \`@Version\`:
 
 \`\`\`java
@@ -4103,7 +4103,7 @@ public void reserveSeat(Long seatId) {
         id: 95,
         text: "How do you manage database transactions in Spring (`@Transactional`)?",
         answer:
-          "`@Transactional` is a Spring AOP annotation that wraps the annotated method in a DB transaction — it starts a transaction before, commits on success, or rolls back on unchecked exception. It only works when called through a **Spring proxy** (i.e., injected bean), not via `this.method()` or on private methods. Transactional boundaries belong at the **service layer**, not controller or repository.",
+          "`@Transactional` wraps the method in a database transaction using Spring AOP — it opens the transaction before the method runs, commits when it returns, and rolls back if a **runtime exception** escapes. It only works through a **Spring proxy**, which means the call has to arrive from outside the bean. Call `this.saveOrder()` from another method in the same class and the annotation does nothing at all — no error, no transaction, just silently unwrapped. Same for private methods, because the proxy can't override them. Put the boundary at the **service layer**, where one method is one unit of work. A controller is too early and a repository is too fine-grained — per-repository transactions commit each save separately, so a half-failed operation leaves half the rows written.",
         explanation: `The proxy trap — the #1 \`@Transactional\` bug:
 
 \`\`\`java
@@ -4150,7 +4150,7 @@ public class OrderService {
         id: 96,
         text: "What is transaction propagation, and what are the different propagation types?",
         answer:
-          "Propagation defines what happens when a `@Transactional` method is called while a transaction is already active. **`REQUIRED`** (default) joins existing or starts new — the standard for all service calls you want in one transaction. **`REQUIRES_NEW`** always starts a fresh transaction, suspending the outer one — use this for audit logging that must commit even if the outer transaction rolls back. **`NESTED`** creates a savepoint inside the outer transaction for partial rollback — but `JpaTransactionManager` **doesn't support it** and throws `NestedTransactionNotSupportedException`, so it's only real on `DataSourceTransactionManager`. Most apps only ever use `REQUIRED` and `REQUIRES_NEW`.",
+          "Propagation decides what happens when a `@Transactional` method gets called while a transaction is already running. **`REQUIRED`** is the default — it joins the existing transaction, or starts one if there isn't any. That's what you want for nearly every service call, because the whole chain then commits or rolls back together. **`REQUIRES_NEW`** suspends the outer transaction and starts its own, so its commit survives even when the caller rolls back — audit logging is the classic case. **`NESTED`** is supposed to be a savepoint inside the outer transaction, but `JpaTransactionManager` doesn't support it and throws `NestedTransactionNotSupportedException`, so on a JPA app it isn't really an option. In practice you use `REQUIRED`, occasionally `REQUIRES_NEW`, and that's the whole list.",
         explanation: `The audit log scenario that demonstrates \`REQUIRES_NEW\`:
 
 \`\`\`java
@@ -4194,7 +4194,7 @@ With \`REQUIRED\` instead of \`REQUIRES_NEW\` on \`auditService.log()\`, the aud
         id: 97,
         text: "What are transaction isolation levels?",
         answer:
-          "Isolation levels define **how much concurrent transactions can see each other's uncommitted changes**. Weakest to strongest:\n\n- `READ_UNCOMMITTED` — dirty reads allowed.\n- `READ_COMMITTED` — no dirty reads; the default in Postgres, Oracle and SQL Server.\n- `REPEATABLE_READ` — no dirty or non-repeatable reads; MySQL/InnoDB's default.\n- `SERIALIZABLE` — no phantoms, full isolation, worst concurrency. Most Spring apps run at `READ_COMMITTED` — good enough for web apps, and raising isolation always costs concurrency.",
+          "Isolation levels decide **how much of another transaction's uncommitted work yours is allowed to see**. `READ_UNCOMMITTED` is the weakest and permits dirty reads — you can read a row that gets rolled back a second later. `READ_COMMITTED` stops that, and it's the default in Postgres, Oracle and SQL Server. `REPEATABLE_READ` also guarantees a row you read twice looks identical both times, and it's MySQL's default under InnoDB. `SERIALIZABLE` is the strongest, blocking phantom rows as well, and it costs the most concurrency. Almost every Spring app runs at `READ_COMMITTED` and never touches the setting. You go higher only for a specific anomaly you've actually seen, because each step up buys correctness with throughput.",
         explanation: `The three anomalies each level prevents:
 
 \`\`\`
@@ -4241,7 +4241,7 @@ public void checkAndCharge(Long id) { ... } // READ 1 == READ 2, guaranteed
         id: 98,
         text: "How do you handle database migrations (Flyway/Liquibase)?",
         answer:
-          "Flyway and Liquibase manage **versioned, incremental SQL scripts** that run in order on startup — every schema change is tracked, checksummed, and recorded in a history table. They replace `ddl-auto=update`, which is unpredictable in production (never drops columns, no history, not reviewable). Flyway uses `V{version}__{desc}.sql` files; Liquibase uses XML/YAML changesets. Both run before your app starts, so the schema is always in sync with your code.",
+          "Flyway and Liquibase run **versioned SQL scripts** in order at startup and record every one in a history table with a checksum. That gives you a schema you can rebuild from an empty database and review in a pull request. They exist to replace `ddl-auto=update`, which is fine on your laptop and dangerous in production — it never drops a column, never records what it did, and nobody reviews it. Flyway names files like `V2__add_email_index.sql`, Liquibase uses XML or YAML changesets. Both run before the app starts, so the code never boots against a schema it doesn't expect. Edit a migration after it's already been applied and Flyway fails startup on the checksum mismatch — that's the feature, not a bug.",
         explanation: `Flyway naming and workflow:
 
 \`\`\`sql
@@ -4279,7 +4279,7 @@ spring.jpa.hibernate.ddl-auto=validate
         id: 99,
         text: "What is connection pooling, and which connection pool does Spring Boot use by default (HikariCP)?",
         answer:
-          "Connection pooling maintains a **pre-created pool of DB connections** that threads borrow and return instead of creating and destroying connections per request — connection creation is expensive (TCP handshake, auth, driver overhead). Spring Boot uses **HikariCP** by default, which is the fastest JDBC connection pool available. Without pooling, a high-throughput app runs out of DB connections instantly and latency spikes on every connection setup.",
+          "A connection pool keeps a set of **already-open DB connections** that threads borrow and hand back, instead of opening a fresh one per request. That matters because opening a connection is expensive — TCP handshake, authentication, driver setup — and it's pure overhead on every call. Spring Boot ships **HikariCP** as the default and you configure nothing to get it. The size is the number worth remembering. The default pool is **10 connections**, which is a hard ceiling on how many requests can touch the DB at once. Once all 10 are checked out the next thread just waits, and if nothing frees up within 30 seconds it fails with `SQLTransientConnectionException`.",
         explanation: `What happens without a pool:
 
 \`\`\`
@@ -4320,7 +4320,7 @@ spring:
         id: 100,
         text: "What is the difference between SQL and NoSQL databases, and when would you choose one over the other?",
         answer:
-          "**SQL databases** (PostgreSQL, MySQL) store structured data in tables with a fixed schema, enforce relational integrity, and support ACID multi-table transactions. **NoSQL databases** (MongoDB, Redis, Cassandra) trade strict schema and relational joins for flexible document/key-value structure, horizontal scalability, and schema evolution without `ALTER TABLE`. Choose SQL when the data is relational, consistency matters, and you need complex queries. Choose NoSQL when the data is document-shaped with a variable schema, write throughput is extreme, or you need geographic distribution.",
+          "**SQL databases** like PostgreSQL and MySQL store rows in tables with a fixed schema, enforce foreign keys, and give you ACID transactions across several tables at once. **NoSQL** isn't one thing — MongoDB stores documents, Redis stores key-value pairs, Cassandra stores wide columns — but they all trade joins and a strict schema for horizontal scale and schema changes without `ALTER TABLE`. The honest answer is that SQL is the default. Most business data is relational, and you want a real transaction the first time one order has to update stock and payment together. Reach for NoSQL when the shape genuinely doesn't fit — fields that vary per record, a cache that needs sub-millisecond reads, or write volume one machine can't absorb.",
         explanation: `The choosing-wrong-DB problem is real and expensive to fix later. Here's the decision:
 
 \`\`\`
@@ -4361,7 +4361,7 @@ public class Application { ... }
         id: 101,
         text: "Explain indexing in databases and how it affects query performance.",
         answer:
-          "A database index is a **separate data structure (B-tree by default)** that maps column values to row locations, letting the DB jump directly to rows matching a `WHERE` clause instead of scanning the full table. Without an index, a `SELECT WHERE email = ?` on a 10M-row table reads every row (full scan). With an index on `email`, the DB does a B-tree lookup in `O(log n)` time and returns the row directly. The trade-off: indexes speed up reads but slow down every write (INSERT/UPDATE/DELETE must update all indexes on the table).",
+          "An index is a **separate B-tree** the database maintains next to the table, mapping column values to the rows that hold them. Without one, `WHERE email = ?` on a 10-million-row table does a full scan and reads all 10 million rows. With an index on `email`, it walks a tree three or four levels deep and goes straight to the row — `O(log n)` instead of `O(n)`. The cost lands on writes. Every INSERT, UPDATE and DELETE has to update every index on that table, so ten indexes make a single write roughly ten times the work. Index the columns you filter and join on, and nothing else.",
         explanation: `The visible cost of a missing index:
 
 \`\`\`sql
@@ -4404,7 +4404,7 @@ WHERE created_at > '2024-01-01' -- skips both
         id: 102,
         text: "What is the difference between `INNER JOIN`, `LEFT JOIN`, and `RIGHT JOIN`?",
         answer:
-          "**`INNER JOIN`** returns only rows where the join condition matches on **both sides** — unmatched rows from either table are dropped. **`LEFT JOIN`** returns all rows from the left table plus matched rows from the right; unmatched right-side columns are `NULL`. **`RIGHT JOIN`** is the mirror: all rows from the right table. In practice you almost always use INNER and LEFT; RIGHT JOIN can always be rewritten as a LEFT JOIN by swapping table order, so most codebases stick to LEFT.",
+          "**`INNER JOIN`** keeps only the rows where the condition matches on **both sides** — anything unmatched on either side just disappears from the result. **`LEFT JOIN`** keeps every row from the left table and fills the right-side columns with `NULL` wherever there's no match. **`RIGHT JOIN`** is the same thing mirrored, keeping every row from the right table instead. In real code you use INNER and LEFT and basically never RIGHT, because any RIGHT JOIN turns into a LEFT JOIN if you swap the table order. The choice comes down to what a missing match means. Use INNER when it makes the row irrelevant, and LEFT when you still need it — a user with no orders should still show up in a user list.",
         explanation: `Data model: Users may or may not have Orders.
 
 \`\`\`sql
