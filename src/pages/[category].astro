@@ -21,10 +21,6 @@ if (!category) {
 }
 
 const { prev, next } = getAdjacentCategories(category.id);
-const followUpTotal = category.questions.reduce(
-  (n, q) => n + q.followUps.length,
-  0
-);
 
 const toc = category.questions.map((q) => ({
   id: String(q.id),
@@ -58,10 +54,10 @@ const toc = category.questions.map((q) => ({
       <span class="badge badge-primary"
         >{category.questions.length} questions</span
       >
-      <span class="badge">{followUpTotal} follow-ups</span>
+      <span class="badge">followups</span>
       <div class="meta-actions">
         <button type="button" class="btn btn-ghost" id="expand-all-followups">
-          Expand follow-ups
+          Expand followups
         </button>
         <button
           type="button"
@@ -77,7 +73,7 @@ const toc = category.questions.map((q) => ({
   <div class="questions">
     {
       category.questions.map((q) => (
-        <QuestionCard question={q} categoryId={category.id} />
+        <QuestionCard question={q} />
       ))
     }
   </div>

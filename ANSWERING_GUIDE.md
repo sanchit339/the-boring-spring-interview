@@ -25,7 +25,7 @@ content file** and **a set of answer-bank files**; everything else is layout.
 
 | File | Role |
 |---|---|
-| `src/data/questions.ts` | **All 158 questions.** Category metadata, question text, `answer`, `explanation`, and the follow-up *text*. ~5,000 lines. |
+| `src/data/questions.ts` | **All 158 questions.** Category metadata, question text, `answer`, `explanation`, and the followup *text*. ~5,000 lines. |
 | `src/data/followup_answers.ts` | Merge point. Holds `baseAnswers` (core-java + oop) and spreads every other bank into one exported map. |
 | `src/data/followup_answers_spring_core.ts` | Bank — `spring-core` (Q36–Q52) |
 | `src/data/followup_answers_spring_boot.ts` | Bank — `spring-boot` (Q53–Q68) |
@@ -46,7 +46,7 @@ Don't edit `dist/` (build output) or the root `.md` files (`ClaudeQuestions.md`,
 
 ---
 
-## 3. The one non-obvious thing: how follow-up answers attach
+## 3. The one non-obvious thing: how followup answers attach
 
 Follow-ups in `questions.ts` carry **only text**:
 
@@ -81,22 +81,22 @@ categories.forEach((cat) =>
 
 ### Consequences — read these before editing
 
-1. **The key must match the follow-up text byte-for-byte.** One different
+1. **The key must match the followup text byte-for-byte.** One different
    character (a hyphen vs an en-dash, a stray space, a changed backtick) and the
    answer silently never appears. **No error, no warning, and the build still
    passes.** This is the single most likely way to break something here.
-2. **If you reword a follow-up in `questions.ts`, you must update its bank key
+2. **If you reword a followup in `questions.ts`, you must update its bank key
    in the same edit.** Always do these two together.
 3. **The merged map is global, not per-category.** Two categories with an
-   identical follow-up string would share one answer. Keep keys specific.
-4. **An inline `answer` on a follow-up wins** (`if (!fu.answer)`). Both forms
+   identical followup string would share one answer. Keep keys specific.
+4. **An inline `answer` on a followup wins** (`if (!fu.answer)`). Both forms
    work; keep new work in the bank files for consistency.
 
 ---
 
 ## 4. Where to add things
 
-### Adding a follow-up answer to a category that already has a bank
+### Adding a followup answer to a category that already has a bank
 Add the key/value to that bank file. Nothing else to wire.
 
 ### Adding answers for a category with no bank yet
@@ -188,12 +188,16 @@ is correct as-is.
 
 ## 6. Current coverage
 
-158 questions, 474 follow-ups, **474 answered / 0 missing** — all 12 categories complete.
+158 questions, 461 followups, **461 answered / 0 missing** — all 12 categories complete.
 
-| Category | Range | Qs | main answer | explanation | follow-up answers |
+Follow-up count is **at most 3, not exactly 3**. Ten `core-java` questions carry
+two because the third was trivia or already answered by the main answer. Prune
+rather than pad — see `answer_rules.md` Rule 7.
+
+| Category | Range | Qs | main answer | explanation | followup answers |
 |---|---|---|---|---|---|
-| `core-java` | Q1–Q28 | 28 | 28/28 | 28/28 | 84/84 |
-| `oop` | Q29–Q35 | 7 | 7/7 | 7/7 | 21/21 |
+| `core-java` | Q1–Q28 | 28 | 28/28 | 28/28 | 74/74 |
+| `oop` | Q29–Q35 | 7 | 7/7 | 7/7 | 18/18 |
 | `spring-core` | Q36–Q52 | 17 | 17/17 | 17/17 | 51/51 |
 | `spring-boot` | Q53–Q68 | 16 | 16/16 | 16/16 | 48/48 |
 | `spring-mvc-rest` | Q69–Q83 | 15 | 15/15 | 15/15 | 45/45 |
@@ -206,8 +210,8 @@ is correct as-is.
 | `behavioral` | Q153–Q158 | 6 | 6/6 | 6/6 | 18/18 |
 
 **Worked example of the §3.1 key-drift bug (now fixed).** Six `core-java`
-follow-ups on Q17/Q18 rendered blank even though their answers existed in
-`baseAnswers` — the follow-up text had been reworded in `questions.ts` without
+followups on Q17/Q18 rendered blank even though their answers existed in
+`baseAnswers` — the followup text had been reworded in `questions.ts` without
 updating the bank keys, stranding all six as orphans:
 
 ```
@@ -246,9 +250,9 @@ for (const q of cat.questions) {
   for (const f of q.followUps)
     if (!f.answer) { missing++; console.log(`Q${q.id} FOLLOWUP UNANSWERED: ${f.text}`); }
 }
-console.log(missing ? `\n${missing} unanswered` : '\nall follow-ups answered');
+console.log(missing ? `\n${missing} unanswered` : '\nall followups answered');
 
-// orphan keys = bank entries matching no follow-up (usually a typo/reworded text)
+// orphan keys = bank entries matching no followup (usually a typo/reworded text)
 const all = new Set(categories.flatMap(c => c.questions.flatMap(q => q.followUps.map(f => f.text))));
 const bank = await import('/Users/sanchitingale/Development/springbootinterview/src/data/followup_answers');
 const orphans = Object.keys(bank.followupAnswers).filter(k => !all.has(k));
@@ -266,24 +270,32 @@ node /tmp/bundle.mjs && node /tmp/check.mjs
 ```
 
 **Orphan keys are the important output.** An orphan means you wrote an answer
-whose key doesn't match any follow-up — the work is invisible on the site.
+whose key doesn't match any followup — the work is invisible on the site.
 
 Then confirm it renders:
 
 ```bash
 npx astro build
-grep -o 'class="followup-answer' dist/<category>/index.html | wc -l   # = follow-up count
-grep -o '<pre class="shiki-block' dist/<category>/index.html | wc -l  # <= 2 x question count
+grep -o 'class="followup-answer' dist/<category>/index.html | wc -l   # = followup count
+grep -o '<pre class="shiki-block' dist/<category>/index.html | wc -l  # rough only — see note
 
 # nothing leaked through as literal source: all three should be 0
 grep -c '\\`' dist/<category>/index.html      # stray escaped backticks
 grep -c '```'  dist/<category>/index.html      # unrendered fences
 ```
 
-The `shiki-block` count is the cheapest check on `answer_rules.md` Rule 7 — **max
-2 code blocks per explanation**. Over the cap means you need to merge two blocks
-(a BAD and GOOD pair reads fine as one block with a comment between them) or move
+The `shiki-block` count is a rough signal for `answer_rules.md` Rule 7 — **max 2
+code blocks per explanation**. Over the cap usually means merging two blocks (a
+BAD and GOOD pair reads fine as one block with a comment between them) or moving
 config into prose with inline code.
+
+**It over-counts, so don't treat it as a hard gate.** It sums code blocks in
+explanations *and* in follow-up answers, and it ignores Rule 7's own exception
+for questions that compare 3+ things. `oop` renders 20 blocks against a nominal
+cap of 14 and is entirely compliant: 19 are in explanations, and the two that
+exceed 2 are Q33 (five SOLID principles) and Q34 (seven design patterns) — both
+covered by the exception. To check properly, count `\`\`\`` pairs per
+`explanation` string rather than counting rendered blocks per page.
 
 Note that `${...}` **should** still appear in the rendered HTML — Spring
 placeholders in code samples are meant to survive as literal text. It's `\` and
@@ -294,9 +306,9 @@ clean them up when done.
 
 ---
 
-## 8. Editing follow-up *questions* (not just answers)
+## 8. Editing followup *questions* (not just answers)
 
-A follow-up has to be a question an interviewer would **actually ask a 2 YoE
+A followup has to be a question an interviewer would **actually ask a 2 YoE
 candidate next**, given what they just said. Not filler, not invented to fill a
 slot of three, not trivia. Four patterns fail that bar and are worth fixing on
 sight:
@@ -393,7 +405,7 @@ for m in re.finditer(r'id: (\d+),\n\s*text: \".*?\",\n\s*answer: \"(.*?)\",\n\s*
 ## 10. Quick checklist
 
 - [ ] Answer added to the correct bank file (or `baseAnswers` for core-java/oop)
-- [ ] Key matches the follow-up text **exactly** — copy-paste it, don't retype
+- [ ] Key matches the followup text **exactly** — copy-paste it, don't retype
 - [ ] New bank file: **both** the import and the spread added in `followup_answers.ts`
 - [ ] Quotes escaped (`\"`); backticks escaped if using a template literal
 - [ ] No `#` headers (they don't render); `- ` / `1. ` lists do render — use them

@@ -40,6 +40,23 @@ definition. Every rule below follows from that.
 - Read it aloud before you commit it. If you run out of breath or lose the
   thread halfway, so would the candidate — and so would the interviewer.
 
+### Rhythm
+
+Correct sentences in the wrong order still read like a list someone un-bulleted.
+Two fixes carry most of the weight:
+
+- **Put a breath before you turn.** An answer that states what a thing is and
+  then pivots to its limits needs one short sentence at the hinge — "That covers
+  most of what an app needs, but not everything." It signals the turn is
+  deliberate, and it gives the candidate somewhere to think mid-answer.
+- **Vary how consecutive sentences open.** Two sentences starting `When…` /
+  `When…` read as bullets in disguise. `Once… / And if…` carries the identical
+  content and sounds like a person.
+
+The test is the same as everywhere else: say it out loud. A clipped landing —
+two short directives back to back with no connective tissue — is the most common
+way a technically perfect answer still sounds recited.
+
 ### Learnable
 
 The answer has to be **recallable**, not merely correct. Memory hangs off
@@ -56,7 +73,7 @@ impossible to reproduce in a room. Concrete beats complete.
 
 - Write for a **2 YoE candidate answering honestly**, not a staff engineer
   performing seniority. No implied war stories, no scale nobody asked about, no
-  tool name-dropping the candidate couldn't defend on the very next follow-up.
+  tool name-dropping the candidate couldn't defend on the very next followup.
 - If a sentence would collapse under "have you actually done that?", cut it.
 - **No interview meta-commentary.** "Which is the most common stale answer here",
   "the answer interviewers want to hear" — that's study-guide voice *about* the
@@ -126,6 +143,13 @@ Not all 5 are always needed. Skip what doesn't add value. Never pad.
 
 - Never define terms that are already in the question text
 - Never repeat the answer field verbatim in the explanation
+- **Never let a followup restate its parent `answer`.** A followup that walks
+  the same points in the same order is wasted space — the reader already has it,
+  and it's the most common defect in existing content. Each followup must hold
+  ground the main answer doesn't reach: the mechanism underneath it, the failure
+  it causes, or the fix. If you edit a main answer, re-read its followups —
+  tightening an answer routinely pulls detail *up* out of a followup and leaves
+  that followup saying nothing new
 - Never use a table unless it's the clearest way to show a comparison (time complexity, feature differences)
 - Never end with "I hope this helps" or any filler closing sentence
 - Never use more than 2 code blocks per explanation unless the question specifically compares 3+ things
