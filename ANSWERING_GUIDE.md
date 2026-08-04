@@ -188,11 +188,15 @@ is correct as-is.
 
 ## 6. Current coverage
 
-158 questions, 474 follow-ups, **474 answered / 0 missing** — all 12 categories complete.
+158 questions, 464 follow-ups, **464 answered / 0 missing** — all 12 categories complete.
+
+Follow-up count is **at most 3, not exactly 3**. Ten `core-java` questions carry
+two because the third was trivia or already answered by the main answer. Prune
+rather than pad — see `answer_rules.md` Rule 7.
 
 | Category | Range | Qs | main answer | explanation | follow-up answers |
 |---|---|---|---|---|---|
-| `core-java` | Q1–Q28 | 28 | 28/28 | 28/28 | 84/84 |
+| `core-java` | Q1–Q28 | 28 | 28/28 | 28/28 | 74/74 |
 | `oop` | Q29–Q35 | 7 | 7/7 | 7/7 | 21/21 |
 | `spring-core` | Q36–Q52 | 17 | 17/17 | 17/17 | 51/51 |
 | `spring-boot` | Q53–Q68 | 16 | 16/16 | 16/16 | 48/48 |

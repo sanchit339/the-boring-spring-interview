@@ -36,7 +36,7 @@ But the moment you use \`new String("hello")\`, you bypass the pool and get a fr
 
 **Why this matters in Spring:** If you ever compare HTTP headers, path variables, or enum names using \`==\`, you'll get subtle bugs. Always use \`.equals()\` or \`Objects.equals(a, b)\` (null-safe version) for object comparisons.`,
         followUps: [
-          { text: "What happens when you compare two `Integer` objects with `==` that fall within the Integer cache range (-128 to 127)?" },
+          { text: "`Integer a = 127, b = 127;` — is `a == b` true? What about `128`?" },
           { text: "Why must `equals()` and `hashCode()` always be overridden together?" },
           { text: "What contract does `equals()` have to satisfy?" },
         ],
@@ -179,7 +179,7 @@ public class UserId {
 
 **Why not use HashMap in multithreaded code?** Two threads calling put() simultaneously during rehashing can create a circular reference in the linked list (Java 7) or corrupt the tree structure (Java 8). Use ConcurrentHashMap — it locks at the bucket level, so reads are lock-free and writes only block that one bucket, not the whole map.`,
         followUps: [
-          { text: "What changed in Java 8 regarding collision handling?" },
+          { text: "What stops one overloaded bucket from degrading lookups to O(n)?" },
           { text: "What is the load factor, and when does rehashing occur?" },
           { text: "What is the difference between `HashMap` and `ConcurrentHashMap` for multi-threaded access?" },
         ],
@@ -248,7 +248,6 @@ System.out.println(scores.headSet(90)); // [78] — all scores below 90
         followUps: [
           { text: "How is `HashSet` implemented internally in relation to `HashMap`?" },
           { text: "When would you use `TreeSet` over `HashSet`?" },
-          { text: "Does `HashSet` allow `null` elements? Does `TreeSet`?" },
         ],
       },
       {
@@ -349,7 +348,7 @@ public class GlobalExceptionHandler {
 
 **The important nuance:** Don't use unchecked exceptions as an excuse to swallow or ignore errors. The difference is where the handling happens — not whether it happens at all.`,
         followUps: [
-          { text: "Give examples of each from the JDK." },
+          { text: "Why does Spring wrap `SQLException` into `DataAccessException`?" },
           { text: "When should you create a custom checked exception vs an unchecked one in a Spring service?" },
           { text: "What is the difference between `throw` and `throws`?" },
         ],
@@ -403,7 +402,6 @@ try (
         followUps: [
           { text: "What interface must a resource implement to work with try-with-resources?" },
           { text: "What happens to suppressed exceptions when both `try` and `close()` throw?" },
-          { text: "Can you declare multiple resources in a single try-with-resources block?" },
         ],
       },
       {
@@ -448,7 +446,6 @@ int fastSum = nums.stream()
         followUps: [
           { text: "What is the difference between `int` and `Integer` in terms of memory and nullability?" },
           { text: "How can autoboxing cause a `NullPointerException`?" },
-          { text: "Why can comparing boxed integers with `==` be surprising due to caching?" },
         ],
       },
       {
@@ -489,8 +486,7 @@ try {
 
 The problem was that finalize() ran on the GC thread at an indeterminate time. Objects with a finalizer couldn't be collected in the first GC pass — they had to be queued, finalized, then collected in the next pass. This delayed memory reclamation and caused "finalizer storms" in high-load apps. The modern replacement is try-with-resources with AutoCloseable for deterministic cleanup.`,
         followUps: [
-          { text: "Can a `final` method be overridden? Can a `final` class be extended?" },
-          { text: "Does `finally` always execute? What about `System.exit()`?" },
+          { text: "Does `finally` always execute?" },
           { text: "Why is `finalize()` deprecated, and what should you use instead?" },
         ],
       },
@@ -525,7 +521,6 @@ User user = Optional.ofNullable(foundUser).orElseGet(defaultUser);
         followUps: [
           { text: "What is the `@FunctionalInterface` annotation for, and is it mandatory?" },
           { text: "Explain `Predicate`, `Function`, `Consumer`, and `Supplier` with one-line use cases." },
-          { text: "Can a functional interface have default methods?" },
         ],
       },
       {
@@ -715,7 +710,7 @@ Comparator<Product> safeSort = Comparator.comparing(
 
 **The inconsistency trap:** If your \`compareTo\` is inconsistent with \`equals\` (they disagree on equality), TreeSet and TreeMap will behave strangely — they use compareTo for membership checks, not equals. The contract says: if compareTo returns 0, equals should return true.`,
         followUps: [
-          { text: "Where is natural ordering defined, and when would you use an external Comparator?" },
+          { text: "What breaks if `compareTo` returns inconsistent results for the same pair?" },
           { text: "How do you sort a list of objects by multiple fields using Comparator chaining?" },
           { text: "What happens if `compareTo` is inconsistent with `equals`?" },
         ],
@@ -814,7 +809,6 @@ p.greet(); // "Parent" — resolved at compile time, not runtime
         followUps: [
           { text: "Can two methods differ only by their return type?" },
           { text: "Can you override a static method? What is method hiding?" },
-          { text: "What access modifier rules apply when overriding a method?" },
         ],
       },
       {
@@ -869,7 +863,6 @@ when(service.get(1L)).thenReturn(user);
         followUps: [
           { text: "When are static blocks executed relative to constructors?" },
           { text: "Why is static mutable state a problem in a Spring application?" },
-          { text: "What are static imports, and when are they appropriate?" },
         ],
       },
       {
@@ -1097,7 +1090,6 @@ synchronized (lock) { ... } // safer than synchronized (this)
 \`\`\``,
         followUps: [
           { text: "What object is locked when you synchronize on a static method vs an instance method?" },
-          { text: "Why is synchronizing on a smaller critical section usually preferred?" },
           { text: "What is a race condition, and how does synchronization prevent it?" },
         ],
       },
@@ -1236,7 +1228,6 @@ if (lockA.tryLock(1, TimeUnit.SECONDS)) {
 
 **Diagnosing a deadlock in production:** Run \`jstack <pid>\` — it prints a thread dump. Look for threads in "BLOCKED" state with "waiting to lock" messages, and a "Found one Java-level deadlock" section. In Spring Boot, Actuator's \`/actuator/threaddump\` endpoint returns this as JSON without shell access.`,
         followUps: [
-          { text: "What conditions all have to hold at once for a deadlock to form?" },
           { text: "How would you diagnose a deadlock in a JVM that's already hung?" },
           { text: "How do lock ordering and timeouts help prevent deadlocks?" },
         ],
@@ -1276,7 +1267,6 @@ while (true) {
 
 **In Spring Boot — monitoring GC:** Actuator's \`/actuator/metrics/jvm.gc.pause\` shows GC pause times. High pause frequency usually means you're creating too many objects (check for string concatenation in loops, redundant object creation in hot paths).`,
         followUps: [
-          { text: "What is the generational hypothesis, and how do young/old gen work?" },
           { text: "Which collector does a modern JVM use by default, and when would you change it?" },
           { text: "What is the difference between `StackOverflowError` and `OutOfMemoryError`?" },
         ],
