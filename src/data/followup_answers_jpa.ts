@@ -1,6 +1,6 @@
 /**
- * Answer bank for follow-up questions — Spring Data JPA / Hibernate category.
- * Keyed by the exact follow-up `text` so answers merge into the FollowUp
+ * Answer bank for followup questions — Spring Data JPA / Hibernate category.
+ * Keyed by the exact followup `text` so answers merge into the FollowUp
  * objects at runtime without touching questions.ts.
  *
  * Style (per answer_rules.md):

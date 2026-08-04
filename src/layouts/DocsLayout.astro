@@ -110,7 +110,7 @@ const searchIndex = getAllQuestions().map((q) => ({
           (item) => `
         <a class="result-item" href="/${item.categoryId}#q-${item.id}">
           <div class="result-q">${escapeHtml(item.text)}</div>
-          <div class="result-meta">${escapeHtml(item.categoryTitle)} · Q${item.id}${item.followUpCount ? ` · ${item.followUpCount} follow-ups` : ""}</div>
+          <div class="result-meta">${escapeHtml(item.categoryTitle)} · Q${item.id}${item.followUpCount ? ` · ${item.followUpCount} followups` : ""}</div>
         </a>`
         )
         .join("");

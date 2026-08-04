@@ -1,6 +1,6 @@
 /**
- * Answer bank for follow-up questions.
- * Keyed by the exact follow-up `text` so answers can be merged into the
+ * Answer bank for followup questions.
+ * Keyed by the exact followup `text` so answers can be merged into the
  * FollowUp objects at runtime without touching questions.ts.
  *
  * Style (per answer_rules.md):
@@ -288,15 +288,12 @@ const baseAnswers: Record<string, string> = {
   "How does the JVM know which overridden method to call?":
     "Every object carries a pointer to its **class's virtual method table (vtable)**. When you call `animal.speak()` via a `Animal` reference, the JVM looks up the `speak` slot in the **actual runtime class's** vtable (e.g., `Dog`), not the declared type. That indirection is dynamic dispatch — the override always wins. `final`, `private`, and `static` methods skip the vtable because they can't be overridden.",
 
-  "Can constructors be polymorphic?":
-    "**No.** Constructors aren't inherited and aren't overridden, so there's no dynamic dispatch on them — you always call a specific constructor via `new ClassName(...)`. What you *can* do is hide construction behind a **factory method** that returns the supertype and picks the concrete class: `static Animal create(...)` returning `new Dog()`. Polymorphism of creation is achieved via factories, not constructors.",
+  "What happens if a constructor calls an overridable method?":
+    "The **subclass override runs before the subclass constructor does**, so it executes against fields that haven't been assigned yet.\n\nThe order is fixed: the parent constructor runs first, then the child's field initializers, then the child's constructor body. So if the parent constructor calls an overridable method, dynamic dispatch sends it to the child's override — at a point where every field the child declares is still `null` or `0`.\n\n```java\nclass Report {\n    Report() { render(); }              // calls the override, too early\n    void render() { }\n}\n\nclass PdfReport extends Report {\n    private final String title = \"Q4\";   // not assigned yet when render() runs\n    @Override void render() {\n        System.out.println(title.length()); // NPE — title is still null\n    }\n}\n```\n\n`new PdfReport()` throws `NullPointerException` on a `final` field with an initializer sitting right there, which is why it reads as impossible the first time you see it.\n\nThe rule is to **call only `private`, `static` or `final` methods from a constructor** — none of those dispatch to a subclass. If subclasses need to contribute behaviour, do it after construction with an init method or a factory.",
 
   // ===================== Q31: composition vs inheritance =====================
   "What does `extends` commit you to that holding a field doesn't?":
     "To the parent's **entire public surface, permanently**. `class Order extends PriceCalculator` means every public method on `PriceCalculator` is now part of `Order`'s API whether it makes sense for an order or not, and you can never take one away. You've also spent your one superclass slot, and you're exposed to the parent changing under you.\n\nHolding a field commits you to nothing: `class Order { private PriceCalculator calc; }` exposes only what you choose to delegate, lets you swap the collaborator per environment or per test, and lets you hold several. That's the practical content of Effective Java Item 18.",
-
-  "How does composition help avoid the fragile base class problem?":
-    "With inheritance, a parent class change (renaming a protected method, shifting call order) can silently break subclasses it never knew about — the \"fragile base class.\" Composition only depends on the parent's **public API**, so internal refactors don't ripple. You also avoid unintended method inheritance (a subclass accidentally overriding something it didn't mean to expose).",
 
   "Give an example where inheritance is still the right choice.":
     "When there's a true **\"is-a\"** relationship and the subclass genuinely specializes the parent's contract — `ArrayList extends AbstractList`, `HashSet extends AbstractSet`, or your `BaseEntity` with `id`/`createdAt` fields and lifecycle hooks. The framework controls both sides, the hierarchy is shallow, and the subclass truly substitutes for the parent everywhere. If you can't say \"B is an A\" in plain English, use composition instead.",
@@ -307,9 +304,6 @@ const baseAnswers: Record<string, string> = {
 
   "How does dependency injection reduce coupling?":
     "Instead of `new StripeGateway()` hardcoded inside `PaymentService`, the service declares `PaymentGateway gateway` and the **container injects** it. `PaymentService` depends on the **interface**, not a concrete class — so prod wires Stripe, tests wire a fake, and neither change touches the service. DI replaces `new` (the source of tight coupling) with a contract.",
-
-  "What is the difference between tight and loose coupling with a code example?":
-    "Tight: `class OrderService { private StripeGateway g = new StripeGateway(); }` — knows the concrete class, can't test without Stripe, recompile to change providers. Loose: `class OrderService(OrderGateway g)` (constructor-injected interface) — depends on an abstraction, swap the impl freely, mock in tests. The loose version doesn't care *who* implements the gateway, only *that* it honors the contract.",
 
   // ===================== Q33: SOLID =====================
   "How does the Open/Closed Principle show up with Strategy pattern?":
@@ -322,9 +316,6 @@ const baseAnswers: Record<string, string> = {
     "A `UserController` that validates input, calls the DB directly (`userRepo.save`), sends a welcome email, builds a PDF invoice, and formats the JSON response. Six reasons to change.\n\nFix: controller only does HTTP binding + response; validation → `@Valid`; persistence → `UserService`; email → `EmailService`; PDF → `InvoiceService`. Each class has one reason to change — one axis of modification.",
 
   // ===================== Q34: design patterns =====================
-  "Where does Spring itself use Singleton and Factory patterns?":
-    "Every `@Component`/`@Service`/`@Repository` bean is a **Singleton** by default — one instance per context, shared across the app, which is why you must keep them stateless. **Factory** shows up in `BeanFactory`/`ApplicationContext` creating and wiring beans, plus `FactoryBean<T>` for custom creation logic (e.g., creating a Hibernate `SessionFactory` or a third-party client).",
-
   "When would you use Facade vs Adapter in an integration layer?":
     "**Adapter** makes an existing incompatible interface look like one you need — wrapping a legacy SOAP client behind your `PaymentGateway` interface so callers don't know SOAP exists.\n\n**Facade** simplifies a complex subsystem behind one coarse-grained entry point — `OrderFacade.placeOrder()` orchestrating inventory, payment, shipping, and notification so callers see one method. Adapter is about *shape mismatch*; Facade is about *reducing surface area*.",
 
@@ -332,8 +323,8 @@ const baseAnswers: Record<string, string> = {
     "A `UserDto` with 12 optional fields is painful via a telescoping constructor (`new UserDto(name, null, null, email, null, ...)`). Builder gives fluent `UserDto.builder().name(...).email(...).role(ADMIN).build()`, makes required fields explicit, produces an **immutable** object, and reads clearly at the call site. Lombok's `@Builder` does this with one annotation; it's the standard for request/response DTOs.",
 
   // ===================== Q35: Singleton threading =====================
-  "Explain double-checked locking and why `volatile` is needed.":
-    "The pattern: check `if (instance == null)` un-synchronized first (fast path), then `synchronized` and check again before creating. Without `volatile` on the instance field, another thread can see a **partially constructed** object — the reference is published before the constructor finishes, due to instruction reordering. `volatile` adds the happens-before barrier that guarantees a fully-constructed object is visible. Pre-Java-5 this was actually broken; Java 5+ memory model fixed it.",
+  "Why isn't checking for `null` twice enough to make lazy initialization safe?":
+    "Because the second check fixes the wrong problem. Double-checked locking — test `instance == null`, take the lock, test again — stops two threads *creating* two instances. It doesn't stop a thread seeing a **half-built** one.\n\nThe reference can be published before the constructor has finished, so another thread finds a non-null `instance` and starts using an object whose fields aren't set yet. Marking the field **`volatile`** is what closes it, guaranteeing the construction is complete before any thread can see the reference.\n\nIn practice you don't write this. Use an **enum singleton**, or let Spring's singleton scope hold the instance — both are safe without you reasoning about any of it.",
 
   "How does an enum-based Singleton avoid these issues?":
     "An `enum` Singleton (`enum Singleton { INSTANCE; }`) gets thread safety, lazy initialization, and serialization guarantees **for free** from the JVM — the language guarantees one instance per enum constant and handles reflection/serialization attacks that a hand-rolled singleton is vulnerable to. It's the cleanest classic Singleton. Drawback: can't lazily init *parameters* and doesn't fit when you need to extend a class.",

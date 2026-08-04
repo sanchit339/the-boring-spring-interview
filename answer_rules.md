@@ -73,7 +73,7 @@ impossible to reproduce in a room. Concrete beats complete.
 
 - Write for a **2 YoE candidate answering honestly**, not a staff engineer
   performing seniority. No implied war stories, no scale nobody asked about, no
-  tool name-dropping the candidate couldn't defend on the very next follow-up.
+  tool name-dropping the candidate couldn't defend on the very next followup.
 - If a sentence would collapse under "have you actually done that?", cut it.
 - **No interview meta-commentary.** "Which is the most common stale answer here",
   "the answer interviewers want to hear" — that's study-guide voice *about* the
@@ -143,13 +143,13 @@ Not all 5 are always needed. Skip what doesn't add value. Never pad.
 
 - Never define terms that are already in the question text
 - Never repeat the answer field verbatim in the explanation
-- **Never let a follow-up restate its parent `answer`.** A follow-up that walks
+- **Never let a followup restate its parent `answer`.** A followup that walks
   the same points in the same order is wasted space — the reader already has it,
-  and it's the most common defect in existing content. Each follow-up must hold
+  and it's the most common defect in existing content. Each followup must hold
   ground the main answer doesn't reach: the mechanism underneath it, the failure
-  it causes, or the fix. If you edit a main answer, re-read its follow-ups —
-  tightening an answer routinely pulls detail *up* out of a follow-up and leaves
-  that follow-up saying nothing new
+  it causes, or the fix. If you edit a main answer, re-read its followups —
+  tightening an answer routinely pulls detail *up* out of a followup and leaves
+  that followup saying nothing new
 - Never use a table unless it's the clearest way to show a comparison (time complexity, feature differences)
 - Never end with "I hope this helps" or any filler closing sentence
 - Never use more than 2 code blocks per explanation unless the question specifically compares 3+ things

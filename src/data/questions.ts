@@ -1434,14 +1434,14 @@ for (Shape s : shapes) {
         followUps: [
           { text: "Why is overloading resolved before the program even runs?" },
           { text: "How does the JVM know which overridden method to call?" },
-          { text: "Can constructors be polymorphic?" },
+          { text: "What happens if a constructor calls an overridable method?" },
         ],
       },
       {
         id: 31,
         text: "What is the difference between composition and inheritance? Which is preferred and why?",
         answer:
-            "**Inheritance** models an \"is-a\" relationship — `SavingsAccount extends BankAccount`. The subclass is welded to the parent's implementation, so a change upstream silently breaks it. That's the fragile base class problem.\n\n**Composition** models \"has-a\" — `OrderService` holds a `PaymentGateway` and delegates to it.\n\nPrefer composition in most cases:\n\n- You can swap the component at runtime, which is exactly what dependency injection does.\n- You can combine behaviours without a deep hierarchy.\n- A change inside the component doesn't ripple out into the container.\n\nThe GoF line is **\"Favor object composition over class inheritance.\"** Inheritance still wins when the subtype genuinely *is* the supertype and shares a stable contract.",
+            "**Inheritance** models an \"is-a\" relationship — `SavingsAccount extends BankAccount`. The subclass is welded to the parent's implementation, so a change upstream can silently break it. That's the fragile base class problem.\n\n**Composition** models \"has-a\" — `OrderService` holds a `PaymentGateway` and delegates to it.\n\nPrefer composition, for three reasons that all point the same way. You can swap the component at runtime, which is exactly what dependency injection does every time it hands your service a different implementation. You can combine behaviours without growing a deep hierarchy to hang them on. And a change inside the component stays inside it, instead of rippling out to everything that extended it.\n\nThe GoF line is **\"Favor object composition over class inheritance.\"** Inheritance still wins when the subtype genuinely *is* the supertype and the parent's contract is stable — which is far rarer than the number of `extends` in most codebases suggests.",
         explanation: `**The fragile base class problem inheritance creates:**
 
 \`\`\`java
@@ -1503,7 +1503,6 @@ class InstrumentedSet<E> implements Set<E> {
 **In Spring:** Spring itself favors composition heavily — ApplicationContext composes multiple strategy objects (message sources, event publishers, etc.) rather than subclassing them all.`,
         followUps: [
           { text: "What does `extends` commit you to that holding a field doesn't?" },
-          { text: "How does composition help avoid the fragile base class problem?" },
           { text: "Give an example where inheritance is still the right choice." },
         ],
       },
@@ -1559,14 +1558,13 @@ public class InvoiceService { void generateInvoice(Long userId) { ... } }
         followUps: [
           { text: "How do the controller, service, and repository layers reflect cohesion and coupling?" },
           { text: "How does dependency injection reduce coupling?" },
-          { text: "What is the difference between tight and loose coupling with a code example?" },
         ],
       },
       {
         id: 33,
         text: "Explain SOLID principles with examples.",
         answer:
-            "Five principles that keep classes small and swappable:\n\n- **Single Responsibility** — one reason to change. An `InvoiceService` that computes totals *and* renders the PDF has two, and breaks whenever either the tax rules or the layout move.\n- **Open/Closed** — open for extension, closed for modification. Adding a third `PaymentGateway` shouldn't mean editing a `switch` inside `OrderService`.\n- **Liskov Substitution** — a subtype has to work anywhere its parent does. `Square extends Rectangle` violates it: `setWidth(5)` quietly changes the height too, so code written against `Rectangle` breaks.\n- **Interface Segregation** — small, focused interfaces. Don't force a read-only `CatalogRepository` to implement a `delete()` it must never call.\n- **Dependency Inversion** — depend on abstractions. `OrderService` takes a `PaymentGateway`, never a `StripeClient`, so the container picks the implementation at runtime.\n\nThe last two are what Spring's container is built on — you already use them every time you inject an interface.",
+            "Five principles that all push toward classes being small and swappable.\n\n**Single Responsibility** — one reason to change. An `InvoiceService` that computes totals *and* renders the PDF has two, so it breaks whenever the tax rules move or the layout does. **Open/Closed** — open for extension, closed for modification. Adding a third `PaymentGateway` shouldn't mean editing a `switch` inside `OrderService`.\n\n**Liskov Substitution** — a subtype has to work anywhere its parent does. `Square extends Rectangle` is the classic violation: `setWidth(5)` quietly changes the height too, so code written against `Rectangle` breaks when handed a `Square`.\n\n**Interface Segregation** — keep interfaces small and focused, so a read-only `CatalogRepository` never has to implement a `delete()` it must not call. **Dependency Inversion** — depend on abstractions, so `OrderService` takes a `PaymentGateway` and never a `StripeClient`, leaving the container to pick the implementation at runtime.\n\nThose last two are what Spring's container is built on. You apply them every time you inject an interface, whether or not you call them by name.",
         explanation: `**S — Single Responsibility:**
 \`\`\`java
 // VIOLATION — one class handles both user logic AND email
@@ -1661,7 +1659,7 @@ class OrderService {
         id: 34,
         text: "Which design patterns come up most often in a Spring application?",
         answer:
-            "**Singleton** — one instance per JVM (Spring beans are singletons by default). **Factory** — abstract object creation; Spring's `ApplicationContext.getBean()` is a factory. **Builder** — construct complex objects step by step; `ResponseEntity.ok().header(...).body(...)` is a builder.\n\n**Strategy** — swap algorithms at runtime through an interface; payment gateway selection is a strategy. **Observer** — publish/subscribe; Spring's `ApplicationEvent` system is observer.\n\n**Facade** — simplified interface to a complex subsystem. **Adapter** — make incompatible interfaces work together.",
+            "The honest answer is that you use most of them without naming them, because Spring is built out of them.\n\n**Singleton** — one shared instance, which is what every Spring bean is by default. **Factory** — something else decides how an object gets built; that's `ApplicationContext` handing you beans. **Builder** — assemble a complex object step by step, like `ResponseEntity.ok().header(...).body(...)`.\n\n**Strategy** is the one worth naming in an interview, because it's the shape of most good Spring code. Inject a `PaymentGateway` interface, let the container choose `StripeGateway` or `PayPalGateway`, and adding a third means adding a class rather than editing a `switch`. **Observer** is `ApplicationEventPublisher` — publish an event, and whatever `@EventListener` cares about it reacts without the publisher knowing it exists.\n\n**Facade** and **Adapter** both wrap something, and the difference is intent. A facade **simplifies** — one `CheckoutService` method hiding four subsystem calls. An adapter **translates** — making a third-party client fit the interface your code already expects, which is how you keep a vendor SDK from leaking through your whole codebase.",
         explanation: `**Builder — the one you use constantly in Spring:**
 \`\`\`java
 // Spring's own ResponseEntity uses builder pattern
@@ -1742,7 +1740,6 @@ class OrderFacade {
 }
 \`\`\``,
         followUps: [
-          { text: "Where does Spring itself use Singleton and Factory patterns?" },
           { text: "When would you use Facade vs Adapter in an integration layer?" },
           { text: "How does the Builder pattern help with complex DTO or entity construction?" },
         ],
@@ -1814,7 +1811,7 @@ DatabaseConnection.INSTANCE.getConnection();
 
 **The Spring truth:** Spring's default singleton scope means one bean instance per ApplicationContext — Spring handles the thread-safe creation. You never write Singleton pattern boilerplate for Spring-managed beans. The only time you'd write this is for true application-wide singletons outside the Spring context (e.g., in a static utility that runs before the context starts).`,
         followUps: [
-          { text: "Explain double-checked locking and why `volatile` is needed." },
+          { text: "Why isn't checking for `null` twice enough to make lazy initialization safe?" },
           { text: "How does an enum-based Singleton avoid these issues?" },
           { text: "How does Spring's default singleton scope differ from a classic Singleton implementation?" },
         ],
@@ -6846,7 +6843,7 @@ FOLLOW-UP   What you'd watch to find out who was right, and what happened.
   },
 ];
 
-// Enrich follow-ups with their answers, keyed by exact text.
+// Enrich followups with their answers, keyed by exact text.
 categories.forEach((cat) =>
   cat.questions.forEach((q) =>
     q.followUps.forEach((fu) => {

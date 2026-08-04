@@ -20,7 +20,7 @@ Most interview prep guides are **boring for the wrong reasons**:
 - 💡 **Real Analogies** — Mental models that map 1:1 to production concepts.
 - 🚨 **`BAD` vs `GOOD` Code** — Real production classes (`OrderService`, `PaymentGateway`), not `Foo` and `Bar`.
 - 💣 **Interview Traps Labeled** — `// NPE here`, `// Memory leak`, `// Race condition`.
-- 🙋‍♂️ **"Ask Next" Follow-ups** — The exact follow-up questions real interviewers throw at 2+ YoE devs.
+- 🙋‍♂️ **"Ask Next" Follow-ups** — The exact followup questions real interviewers throw at 2+ YoE devs.
 
 ---
 
