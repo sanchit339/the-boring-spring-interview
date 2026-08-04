@@ -2569,7 +2569,6 @@ public class Application {
 
 **Real-world impact:** In microservice architectures, Spring Boot allows teams to bootstrap new microservices in minutes. Dependency management is simplified because \`spring-boot-starter-parent\` guarantees compatible library versions across your entire tech stack.`,
         followUps: [
-          { text: "What boilerplate does raw Spring make you write that Boot removes?" },
           { text: "Can you use Spring without Boot? When might you?" },
           { text: "What does \"opinionated\" mean here, and how do you override an opinion?" },
         ],
@@ -2604,7 +2603,6 @@ public class Application {
 
 **Production advice:** When building enterprise microservices across multiple teams, create a **custom company starter** (e.g., \`company-boot-starter-logging\`) containing standardized security filters, logging formats, and tracing configurations. This ensures every team adheres to enterprise architecture standards automatically.`,
         followUps: [
-          { text: "What does `spring-boot-starter-web` actually pull in?" },
           { text: "What is `spring-boot-starter-parent`, and what does it manage?" },
           { text: "How would you create a custom starter for shared company config?" },
         ],
@@ -2644,8 +2642,7 @@ public class CustomDatabaseConfig {
 **Debugging Tip:** Run your application with the \`--debug\` flag or set \`logging.level.org.springframework.boot.autoconfigure=DEBUG\`. Spring Boot prints a detailed **Conditions Evaluation Report** showing exactly which auto-configurations matched and which ones were negative matches and why.`,
         followUps: [
           { text: "What role do `@ConditionalOnClass`, `@ConditionalOnMissingBean`, etc. play?" },
-          { text: "Where does Boot get the list of auto-configuration classes to evaluate?" },
-          { text: "How do you find out which auto-configs applied and which backed off?" },
+          { text: "You defined your own `DataSource` bean but Boot's is still being used. Why?" },
         ],
       },
       {
@@ -2679,7 +2676,6 @@ public class NoDbApplication {
 
 **Package location rule:** Always place your \`@SpringBootApplication\` annotated class in the **root base package** (e.g., \`com.company.order\`). If you put it inside \`com.company.order.config\`, Spring Boot won't scan sibling packages like \`com.company.order.service\`, causing \`NoSuchBeanDefinitionException\`.`,
         followUps: [
-          { text: "What breaks if the main class sits in a sub-package instead of the root?" },
           { text: "Can you replace `@SpringBootApplication` with its composed annotations?" },
           { text: "How do you exclude a specific auto-configuration?" },
         ],
@@ -2763,7 +2759,6 @@ public class MailProperties {
 
 **Why it beats \`@Value\`:** If you have 15 configuration properties for an AWS S3 client, injecting 15 individual \`@Value\` fields litters your class with boilerplate. \`@ConfigurationProperties\` groups them into a single re-usable, testable properties object.`,
         followUps: [
-          { text: "How do you register a `@ConfigurationProperties` class as a bean?" },
           { text: "How do nested objects, lists, and startup validation work with it?" },
           { text: "Why is it preferred over many `@Value` injections for groups of related properties?" },
         ],
@@ -2808,7 +2803,6 @@ java -jar order-service.jar --spring.profiles.active=prod
 
 **Production best practice:** Keep \`application-prod.yml\` clean of plaintext secrets. Use placeholder references like \`password: \${DB_PASSWORD}\` and let Kubernetes or Docker inject \`DB_PASSWORD\` as an environment variable at container startup.`,
         followUps: [
-          { text: "How do profile-specific files and `spring.profiles.active` work together?" },
           { text: "How do you keep prod secrets out of Git?" },
           { text: "What is the difference between multi-document YAML and separate profile files?" },
         ],
@@ -2838,8 +2832,6 @@ logging.level.web=DEBUG
 **Important gotcha:** DevTools triggers automatic restarts only when classpath files change. If using IntelliJ IDEA, you must press \`Ctrl+F9\` (or \`Cmd+F9\` on Mac) to compile your modified Java files, or enable "Build project automatically" in settings.`,
         followUps: [
           { text: "Which property defaults does DevTools change in development?" },
-          { text: "Is DevTools included in production builds by default?" },
-          { text: "What is the difference between the base and restart classloaders?" },
         ],
       },
       {
@@ -2879,7 +2871,6 @@ public class SecurityConfig {
 **Real-world usefulness:** The \`/actuator/loggers\` endpoint lets you temporarily bump package log levels to \`TRACE\` on a running production instance via a \`POST\` request, allowing you to debug live issues without restarting the pod!`,
         followUps: [
           { text: "Which endpoints would you expose in production, and how do you secure them?" },
-          { text: "What do `/health`, `/info`, `/metrics`, and `/env` show?" },
           { text: "How do you customize health status aggregation?" },
         ],
       },
@@ -2954,9 +2945,8 @@ public class PaymentGatewayHealthIndicator implements HealthIndicator {
 
 **When to switch servers:** Undertow offers a lower memory footprint and higher concurrency handling for heavy I/O workloads compared to Tomcat. Netty is used exclusively when building non-blocking, reactive applications using Spring WebFlux.`,
         followUps: [
-          { text: "What happens if two embedded server starters land on the classpath?" },
-          { text: "How do you switch from Tomcat to Jetty or Undertow?" },
           { text: "When would you deploy as WAR to an external server instead?" },
+          { text: "Why would you pick Undertow or Jetty over Tomcat?" },
         ],
       },
       {
@@ -2989,9 +2979,8 @@ public class OrderApiIntegrationTest {
 **Configuring SSL/TLS on embedded server:**
 To enable HTTPS, add \`server.ssl.key-store=classpath:keystore.p12\` and \`server.ssl.key-store-password=secret\` to \`application.yml\`. Tomcat will automatically start listening on HTTPS.`,
         followUps: [
-          { text: "How do you set the port via `application.yml`, env var, and CLI?" },
-          { text: "What happens if the configured port is already in use?" },
           { text: "How do you configure SSL on the embedded server?" },
+          { text: "What is `management.server.port` for?" },
         ],
       },
       {
@@ -3064,7 +3053,6 @@ public class CacheWarmupRunner implements ApplicationRunner {
 
 **Real-world usage:** In production, use \`CommandLineRunner\` sparingly. Long-running or blocking tasks inside a runner will delay the embedded web server startup, causing readiness probe timeouts in cloud deployments.`,
         followUps: [
-          { text: "When do these runners execute in the application lifecycle?" },
           { text: "How do you control order when multiple runners exist?" },
           { text: "What are the risks of doing heavy work inside a runner?" },
         ],
@@ -3100,7 +3088,6 @@ java -Xmx512m -jar target/order-service-1.0.0.jar --server.port=8080
 Spring Boot uses a custom \`JarLauncher\` that allows nesting JAR dependencies inside \`BOOT-INF/lib/\` within a single ZIP structure without needing to explode dependencies onto host file systems.`,
         followUps: [
           { text: "What is an executable fat/uber JAR?" },
-          { text: "What changes are needed to package as a deployable WAR?" },
           { text: "How do you run a Boot JAR with external config?" },
         ],
       },
