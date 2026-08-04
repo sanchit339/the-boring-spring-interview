@@ -1862,7 +1862,6 @@ public class OrderController {
 **The real-world takeaway:** In production Spring Boot applications, you rarely call \`new\` on service, repository, or controller classes. Spring manages their lifecycles as singletons inside the application context, letting you swap implementations or inject mocks during testing without changing a single line of business logic.`,
         followUps: [
           { text: "How is the Spring ecosystem organized, and where does Boot sit in it?" },
-          { text: "How does Spring promote loose coupling compared to manual object wiring?" },
           { text: "What is the difference between Spring Framework and Spring Boot?" },
         ],
       },
@@ -1901,7 +1900,6 @@ public class NotificationService {
 
 **Where it hits production:** Every \`@Service\` or \`@Repository\` class in an enterprise Spring app relies on DI. In unit tests, you pass a mocked \`EmailClient\` straight into \`new NotificationService(mockEmailClient)\` without ever booting Spring, making tests lightning fast.`,
         followUps: [
-          { text: "Is DI a form of IoC, or are they the same thing?" },
           { text: "What is the Hollywood Principle, and how does it relate to IoC?" },
           { text: "How does DI improve testability?" },
         ],
@@ -1936,7 +1934,6 @@ public class PaymentProcessor {
 
 **In production:** Spring framework team explicitly recommends constructor injection for all required dependencies. Lombok's \`@RequiredArgsConstructor\` is commonly used across production codebases to auto-generate constructor injection boilerplate.`,
         followUps: [
-          { text: "Compare constructor, setter, and field injection with pros/cons." },
           { text: "Why is constructor injection recommended for required dependencies?" },
           { text: "When might setter injection still make sense?" },
         ],
@@ -2002,9 +1999,8 @@ ApplicationContext context = new AnnotationConfigApplicationContext(AppConfig.cl
 
 **Real-world trap:** If you rely on \`BeanFactory\` or set \`@Lazy\` on your singletons indiscriminately, missing configuration properties or broken bean wiring will only fail when the first production request hits that specific line of code. \`ApplicationContext\` gives you fail-fast protection on deployment.`,
         followUps: [
-          { text: "Does ApplicationContext eagerly or lazily instantiate singleton beans by default?" },
-          { text: "What does `ApplicationContext` give you that `BeanFactory` doesn't?" },
           { text: "When would you ever use BeanFactory directly?" },
+          { text: "When would you deliberately make a bean `@Lazy`?" },
         ],
       },
       {
@@ -2141,7 +2137,6 @@ public class SqlUserRepository {
 
 **Which stereotype goes where:** \`@Controller\` and \`@RestController\` belong on the web layer, handling HTTP requests and response serialization. \`@Service\` marks the business layer that owns transactions, domain validation, and orchestration. \`@Repository\` marks the persistence layer and buys you the exception translation above. Plain \`@Component\` is the fallback for things that don't sit in any of those tiers — file parsers, external API client wrappers, validators.`,
         followUps: [
-          { text: "Are they functionally the same for component scanning?" },
           { text: "What breaks if you annotate a DAO with `@Component` instead of `@Repository`?" },
           { text: "When would you use plain `@Component` vs a stereotype annotation?" },
         ],
@@ -2183,9 +2178,8 @@ public class AlertService {
 
 **Common error in production:** If you annotate a field with \`@Autowired\` and forget to annotate the target class with \`@Component\` or \`@Service\`, Spring will throw \`UnsatisfiedDependencyException\` caused by \`NoSuchBeanDefinitionException\` on startup, stopping deployment.`,
         followUps: [
-          { text: "What is the order of type matching, qualifier, and bean name resolution?" },
-          { text: "What happens if no matching bean is found and `required=true`?" },
-          { text: "Can you use `@Autowired` on constructors, setters, and fields?" },
+          { text: "You inject `List<PaymentGateway>` and three implementations exist — what happens?" },
+          { text: "What does `required = false` actually give you, and what's better?" },
         ],
       },
       {
@@ -2232,7 +2226,6 @@ public class SpecificCheckoutService {
 
 **Production Pattern:** A great pattern for microservices is having a primary implementation (\`RealS3StorageService\`) marked with \`@Primary\` for production, and an alternate (\`LocalStorageService\`) qualified for local profile testing.`,
         followUps: [
-          { text: "What is the difference between `@Qualifier` and `@Primary`?" },
           { text: "How does bean name relate to field name when resolving by name?" },
           { text: "Can you combine `@Qualifier` with constructor injection?" },
         ],
@@ -2482,7 +2475,6 @@ public class PerformanceAspect {
 
 **Key Difference:** Unlike \`@Before\` or \`@After\`, \`@Around\` MUST return \`Object\` and MUST call \`joinPoint.proceed()\`. If you forget to return the result of \`proceed()\`, the caller receives \`null\` instead of the service method's real return value!`,
         followUps: [
-          { text: "What is the difference between `@After`, `@AfterReturning`, and `@AfterThrowing`?" },
           { text: "When would you use `@Around` instead of `@Before` + `@After`?" },
           { text: "What is a pointcut expression? Give a simple example." },
         ],
@@ -2535,9 +2527,8 @@ public class PaymentService {
 
 **Spring Boot 2.6+ change:** Starting with Spring Boot 2.6, circular dependencies are **forbidden by default** across all injection styles. If legacy code has circular references, you have to explicitly set \`spring.main.allow-circular-references=true\` in \`application.properties\`, but refactoring is the right solution.`,
         followUps: [
-          { text: "Does constructor injection allow circular dependencies by default?" },
           { text: "How does setter injection or `@Lazy` help break cycles?" },
-          { text: "Is fixing the design (extracting a third bean) better than workarounds? Why?" },
+          { text: "You've broken a cycle with `@Lazy` and it boots. What's still wrong?" },
         ],
       },
     ],

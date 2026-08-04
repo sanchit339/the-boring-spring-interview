@@ -188,17 +188,19 @@ is correct as-is.
 
 ## 6. Current coverage
 
-158 questions, 461 followups, **461 answered / 0 missing** — all 12 categories complete.
+158 questions, 452 followups, **452 answered / 0 missing** — all 12 categories complete.
 
-Follow-up count is **at most 3, not exactly 3**. Ten `core-java` questions carry
-two because the third was trivia or already answered by the main answer. Prune
-rather than pad — see `answer_rules.md` Rule 7.
+Followup count is **at most 3, not exactly 3**. Prune rather than pad — see
+`answer_rules.md` Rule 7. Ten `core-java`, three `oop` and nine `spring-core`
+questions carry two, because the third restated the main answer or was trivia.
+`spring-core` needed the most pruning precisely because its main answers are the
+most complete: the richer the answer, the less room a third followup has.
 
 | Category | Range | Qs | main answer | explanation | followup answers |
 |---|---|---|---|---|---|
 | `core-java` | Q1–Q28 | 28 | 28/28 | 28/28 | 74/74 |
 | `oop` | Q29–Q35 | 7 | 7/7 | 7/7 | 18/18 |
-| `spring-core` | Q36–Q52 | 17 | 17/17 | 17/17 | 51/51 |
+| `spring-core` | Q36–Q52 | 17 | 17/17 | 17/17 | 42/42 |
 | `spring-boot` | Q53–Q68 | 16 | 16/16 | 16/16 | 48/48 |
 | `spring-mvc-rest` | Q69–Q83 | 15 | 15/15 | 15/15 | 45/45 |
 | `spring-data-jpa` | Q84–Q102 | 19 | 19/19 | 19/19 | 57/57 |
