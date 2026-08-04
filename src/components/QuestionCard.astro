@@ -4,11 +4,9 @@ import { codeToHtml } from "shiki";
 
 interface Props {
   question: Question;
-  categoryId: string;
 }
 
-const { question, categoryId } = Astro.props;
-const isStudy = categoryId === "core-java";
+const { question } = Astro.props;
 const hasFollowUps = question.followUps.length > 0;
 const hasAnswer = !!(question.answer || question.explanation);
 
@@ -192,7 +190,7 @@ const renderedFollowUpAnswers = await Promise.all(
 
   {
     hasFollowUps && (
-      <div class={isStudy ? "followups followups--study" : "followups"}>
+      <div class="followups followups--study">
         <button
           type="button"
           class="followups-toggle"
@@ -223,45 +221,39 @@ const renderedFollowUpAnswers = await Promise.all(
                     class="followup-text"
                     set:html={renderText(fu.text)}
                   />
-                  {fu.answer &&
-                    (isStudy ? (
-                      <>
-                        <button
-                          type="button"
-                          class="followup-reveal"
-                          data-followup-reveal
-                          aria-expanded="false"
-                        >
-                          <span class="reveal-icon" aria-hidden="true">
-                            <svg
-                              width="11"
-                              height="11"
-                              viewBox="0 0 12 12"
-                              fill="none"
-                            >
-                              <path
-                                d="M6 2v8M2 6h8"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                              />
-                            </svg>
-                          </span>
-                          <span class="reveal-label">Reveal answer</span>
-                        </button>
-                        <div
-                          class="followup-answer prose"
-                          data-reveal-panel
-                          hidden
-                          set:html={renderedFollowUpAnswers[i]}
-                        />
-                      </>
-                    ) : (
+                  {fu.answer && (
+                    <>
+                      <button
+                        type="button"
+                        class="followup-reveal"
+                        data-followup-reveal
+                        aria-expanded="false"
+                      >
+                        <span class="reveal-icon" aria-hidden="true">
+                          <svg
+                            width="11"
+                            height="11"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                          >
+                            <path
+                              d="M6 2v8M2 6h8"
+                              stroke="currentColor"
+                              stroke-width="1.5"
+                              stroke-linecap="round"
+                            />
+                          </svg>
+                        </span>
+                        <span class="reveal-label">Reveal answer</span>
+                      </button>
                       <div
                         class="followup-answer prose"
+                        data-reveal-panel
+                        hidden
                         set:html={renderedFollowUpAnswers[i]}
                       />
-                    ))}
+                    </>
+                  )}
                 </div>
               </li>
             ))}
@@ -642,7 +634,7 @@ const renderedFollowUpAnswers = await Promise.all(
     margin-bottom: 0.35em;
   }
 
-  /* ── Study mode (core-java): per-followup reveal + readability ── */
+  /* ── Study mode: per-followup reveal + readability ── */
   .followup-reveal {
     display: inline-flex;
     align-items: center;
