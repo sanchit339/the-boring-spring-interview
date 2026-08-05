@@ -5451,7 +5451,7 @@ class DiscountCalculatorTest {
 The suite that goes wrong is the one that's all integration tests: it takes 25 minutes, so people stop running it locally, and a failure names a whole request path rather than a class. The opposite failure is a suite that's all unit tests with everything mocked — every test green, and the app doesn't start because two beans were never wired together.`,
         followUps: [
           { text: "Where do you draw the line in a Spring Boot app (service unit test vs `@SpringBootTest`)?" },
-          { text: "What is the testing pyramid, and why prefer more unit tests?" },
+          { text: "What goes wrong when the pyramid is inverted?" },
           { text: "When is an end-to-end test worth the cost?" },
         ],
       },
@@ -5500,8 +5500,8 @@ class OrderServiceTest {
 **Two habits worth forming.** Use **AssertJ** (\`assertThat(x).isEqualTo(y)\`) rather than JUnit's bare \`assertEquals\` — the fluent API gives far better failure messages on collections and objects, and \`spring-boot-starter-test\` already ships it. And name tests after behaviour: \`confirmsOrderWhenPaymentSucceeds\` tells you what broke from the CI output alone, where \`testConfirm1\` sends you reading code.`,
         followUps: [
           { text: "What is the difference between JUnit 4 and JUnit 5 annotations?" },
-          { text: "How do you structure Arrange-Act-Assert in a clean test?" },
-          { text: "When do you use `@ExtendWith(MockitoExtension.class)`?" },
+          { text: "Why should the Act block be a single call?" },
+          { text: "Can you use `@Mock` inside a `@SpringBootTest`?" },
         ],
       },
       {
@@ -5554,7 +5554,7 @@ class OrderRepositoryTest {
 **When you genuinely need the full context:** when the thing under test *is* the wiring. A \`@Transactional\` rollback that has to work through the real proxy, a \`@Scheduled\` job, security filter-chain ordering, or a request path running from HTTP all the way to a real database. Add \`webEnvironment = RANDOM_PORT\` and inject \`TestRestTemplate\` when you want a real HTTP round trip rather than \`MockMvc\`. Keep the number of these low and deliberate — they're what turns a 40-second suite into a 20-minute one.`,
         followUps: [
           { text: "What does each slice load into the context?" },
-          { text: "Why are slice tests faster than full `@SpringBootTest`?" },
+          { text: "Your suite is all slice tests and still slow. Why?" },
           { text: "When must you use a full application context?" },
         ],
       },
@@ -5606,7 +5606,7 @@ class OrderServiceTest {
 
 **The Spring-context equivalents are \`@MockitoBean\` and \`@MockitoSpyBean\`** (Boot 3.4+, replacing the now-deprecated \`@MockBean\` and \`@SpyBean\`). Those **replace the bean inside the application context**, so every collaborator that gets it injected receives the fake. That's the difference from \`@Mock\`, which only exists inside your test class and knows nothing about Spring.`,
         followUps: [
-          { text: "When would you use a spy instead of a mock?" },
+          { text: "Why is reaching for `@Spy` usually a design smell?" },
           { text: "What is the difference between `when().thenReturn()` and `doReturn().when()`?" },
           { text: "How do you verify interactions (`verify`, `times`, `never`)?" },
         ],
@@ -5668,7 +5668,6 @@ class InventoryClientTest {
 **Testing the failure paths is the part people skip**, and it's where the interesting bugs live. WireMock can return a 503, stall past your read timeout, drop the connection mid-body, or return valid JSON with the wrong shape. Those are precisely the paths your retry policy, \`ErrorDecoder\`, circuit breaker, and fallback exist for — and precisely the ones a Mockito stub can never exercise honestly, because it throws whatever exception you told it to rather than whatever the HTTP stack really produces.`,
         followUps: [
           { text: "How do you mock a Feign client vs WebClient?" },
-          { text: "What is WireMock, and when do you prefer it over pure Mockito?" },
           { text: "How do you test timeout and error handling paths?" },
         ],
       },
@@ -5723,7 +5722,7 @@ void anonymousCallerIsRejected() throws Exception {
 
 **Know its boundary.** \`MockMvc\` never opens a socket — it invokes \`DispatcherServlet\` directly with a mock request and response. That's what makes it fast while still running the whole MVC pipeline, but it means the embedded server, real connection handling, and everything below your controller go untested. When you want an actual HTTP round trip, that's \`@SpringBootTest(webEnvironment = RANDOM_PORT)\` with \`TestRestTemplate\`.`,
         followUps: [
-          { text: "How do you assert JSON paths and status codes with MockMvc?" },
+          { text: "How do you catch a field that shouldn't be in the response?" },
           { text: "What is the difference between standalone setup and full Spring context?" },
           { text: "How do you test secured endpoints with MockMvc?" },
         ],
@@ -5774,7 +5773,7 @@ static KafkaContainer kafka =
 **Paying for it honestly.** Docker must be available locally and in CI, cold image pulls are slow the first time, and every container adds startup seconds. Mitigate with a **static container per class**, a **singleton container** shared across the whole suite, or **reuse** — \`withReuse(true)\` plus \`testcontainers.reuse.enable=true\` in \`~/.testcontainers.properties\` keeps the container alive between runs. Reuse is a developer-machine optimisation: leave it off in CI, where every build should start from clean state.`,
         followUps: [
           { text: "How do you spin up Postgres/Kafka in integration tests?" },
-          { text: "What are the trade-offs vs H2 in-memory databases?" },
+          { text: "What does testing against H2 do to your Flyway migrations?" },
           { text: "How do you reuse containers across tests for speed?" },
         ],
       },
@@ -5825,8 +5824,8 @@ class OrderApiIT {
 
 **Isolation is what keeps the suite trustworthy.** Order-dependent tests pass locally in your IDE and fail in CI when the runner shuffles them, and that failure costs far more to debug than the shared fixture ever saved you.`,
         followUps: [
-          { text: "What does `@Transactional` on a test class do for rollback?" },
-          { text: "How do you use `@Sql` scripts or `@BeforeEach` fixtures?" },
+          { text: "What does test rollback hide from you?" },
+          { text: "How do you keep a new required field from breaking forty tests?" },
           { text: "When is `@DirtiesContext` necessary, and why is it expensive?" },
         ],
       },
