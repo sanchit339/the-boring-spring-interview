@@ -3138,7 +3138,7 @@ public class UserRestController {
       {
         id: 69,
         text: "Explain the request flow in Spring MVC (DispatcherServlet, HandlerMapping, etc.).",
-        answer: "Every HTTP request hits a single **`DispatcherServlet`** (Spring's front controller), which asks **`HandlerMapping`** to find the controller method for the URL, uses a **`HandlerAdapter`** to invoke that method, binds parameters, runs the business logic, then resolves the return value into a response — JSON for `@RestController`, a view for `@Controller`. `HandlerInterceptor`s run around the handler, and `@ExceptionHandler`s catch anything thrown. The key idea is **one servlet dispatches everything**, so routing, validation, and exception handling stay centralized instead of living in each controller.",
+        answer: "Every HTTP request hits a single **`DispatcherServlet`** (Spring's front controller), which asks **`HandlerMapping`** to find the controller method for the URL, uses a **`HandlerAdapter`** to invoke that method, binds parameters, runs the business logic, then resolves the return value into a response — JSON for `@RestController`, a view for `@Controller`.\n\n`HandlerInterceptor`s run around the handler, and `@ExceptionHandler`s catch anything thrown.\n\nThe key idea is **one servlet dispatches everything**, so routing, validation, and exception handling stay centralized instead of living in each controller.",
         explanation: `\`\`\`java
 // The full chain for: GET /api/users/42 on an @RestController
 // 1. Filter chain (Spring Security, CORS) runs FIRST
@@ -3163,7 +3163,7 @@ DispatcherServlet
       {
         id: 70,
         text: "What is `@RequestMapping`, and how do `@GetMapping`, `@PostMapping`, etc. differ from it?",
-        answer: "**`@RequestMapping`** is the generic mapping annotation — without a `method` it matches **every HTTP verb** on the given path, which is almost never what you want. **`@GetMapping`**, **`@PostMapping`**, `@PutMapping`, `@PatchMapping`, and `@DeleteMapping` are composed shorthands that pin the handler to one HTTP method. The intent reads at a glance and you don't accidentally handle a DELETE on what should be a GET-only endpoint. Use the composed shortcuts for every handler; reserve raw `@RequestMapping` for **class-level base paths**.",
+        answer: "**`@RequestMapping`** is the generic mapping annotation — without a `method` it matches **every HTTP verb** on the given path, which is almost never what you want.\n\n**`@GetMapping`**, **`@PostMapping`**, `@PutMapping`, `@PatchMapping`, and `@DeleteMapping` are composed shorthands that pin the handler to one HTTP method. The intent reads at a glance and you don't accidentally handle a DELETE on what should be a GET-only endpoint.\n\nUse the composed shortcuts for every handler; reserve raw `@RequestMapping` for **class-level base paths**.",
         explanation: `\`\`\`java
 // WITHOUT narrowed mapping — handles GET, POST, PUT, DELETE... all of them
 @RequestMapping("/users")
@@ -3197,7 +3197,7 @@ public class UserController {
       {
         id: 71,
         text: "What is the difference between `@PathVariable` and `@RequestParam`?",
-        answer: "**`@PathVariable`** pulls a value **out of the URL path** — `/users/{id}` → `@PathVariable Long id` — so the variable is part of the resource identifier itself. **`@RequestParam`** pulls a value **from the query string** — `/users?role=ADMIN` → `@RequestParam String role` — used for filtering, sorting, and optional options. Rule of thumb: if it identifies *which* resource, it's a path variable; if it modifies *how* you fetch the collection, it's a request param. Path variables are required by nature; request params can be optional with defaults.",
+        answer: "**`@PathVariable`** pulls a value **out of the URL path** — `/users/{id}` → `@PathVariable Long id` — so the variable is part of the resource identifier itself.\n\n**`@RequestParam`** pulls a value **from the query string** — `/users?role=ADMIN` → `@RequestParam String role` — used for filtering, sorting, and optional options.\n\nRule of thumb: if it identifies *which* resource, it's a path variable; if it modifies *how* you fetch the collection, it's a request param. Path variables are required by nature; request params can be optional with defaults.",
         explanation: `\`\`\`java
 @RestController
 @RequestMapping("/users")
@@ -3227,7 +3227,7 @@ public class UserController {
       {
         id: 72,
         text: "What is `@RequestBody` and `@ResponseBody` used for?",
-        answer: "**`@ResponseBody`** tells Spring to write the method's return value **straight into the HTTP response body** by serializing it (to JSON via Jackson) instead of treating it as a view name. **`@RequestBody`** does the reverse — it takes the **incoming request body** and deserializes it into a Java object before the method runs. In practice you rarely write either by hand: `@RestController` bakes `@ResponseBody` onto every method, and you just add `@RequestBody` to the DTO parameter of a POST/PUT.",
+        answer: "**`@ResponseBody`** tells Spring to write the method's return value **straight into the HTTP response body** by serializing it (to JSON via Jackson) instead of treating it as a view name.\n\n**`@RequestBody`** does the reverse — it takes the **incoming request body** and deserializes it into a Java object before the method runs.\n\nIn practice you rarely write either by hand: `@RestController` bakes `@ResponseBody` onto every method, and you just add `@RequestBody` to the DTO parameter of a POST/PUT.",
         explanation: `\`\`\`java
 // @RequestBody — deserialize the INCOMING JSON into a Java object
 // @ResponseBody — serialize the RETURN object into JSON (implicit on @RestController)
@@ -3255,7 +3255,7 @@ Both conversions run through an **\`HttpMessageConverter\`** — \`MappingJackso
       {
         id: 73,
         text: "How do you handle validation of request payloads in Spring Boot (`@Valid`, `@Validated`)?",
-        answer: "You annotate the **DTO fields** with Bean Validation constraints (`@NotBlank`, `@Email`, `@Size`, `@Min`), then add **`@Valid`** next to the `@RequestBody` parameter so Spring validates the object **before** the method runs — violations throw `MethodArgumentNotValidException`, which Spring maps to a **400 Bad Request**. **`@Validated`** is Spring's extended version that also enables **validation groups** (validate differently on create vs update) and method-level parameter validation. Use `@Valid` for the common case; reach for `@Validated` only when you need partial/grouped validation.",
+        answer: "You annotate the **DTO fields** with Bean Validation constraints (`@NotBlank`, `@Email`, `@Size`, `@Min`), then add **`@Valid`** next to the `@RequestBody` parameter so Spring validates the object **before** the method runs — violations throw `MethodArgumentNotValidException`, which Spring maps to a **400 Bad Request**.\n\n**`@Validated`** is Spring's extended version that also enables **validation groups** (validate differently on create vs update) and method-level parameter validation.\n\nUse `@Valid` for the common case; reach for `@Validated` only when you need partial/grouped validation.",
         explanation: `\`\`\`java
 // WRONG — no validation, garbage data hits your service/DB
 public Order create(@RequestBody CreateOrderRequest req) {
@@ -3291,7 +3291,7 @@ public class OrderController {
       {
         id: 74,
         text: "How do you implement global exception handling (`@ControllerAdvice`, `@ExceptionHandler`)?",
-        answer: "**`@ExceptionHandler`** goes inside a controller and catches specific exception types thrown by that controller's methods, converting them into an HTTP response. **`@ControllerAdvice`** lifts that to **application-wide** — a single class whose `@ExceptionHandler` methods catch exceptions from *every* controller, giving you one consistent error-response shape. For REST APIs you use **`@RestControllerAdvice`** (it's `@ControllerAdvice` + `@ResponseBody`) so error bodies serialize to JSON automatically. Since Spring 6 you don't invent the error body either. **`ProblemDetail`** is the built-in RFC 7807 type — `type`, `title`, `status`, `detail`, `instance` — so a hand-rolled `ErrorResponse` DTO is the 2019 answer.",
+        answer: "**`@ExceptionHandler`** goes inside a controller and catches specific exception types thrown by that controller's methods, converting them into an HTTP response.\n\n**`@ControllerAdvice`** lifts that to **application-wide** — a single class whose `@ExceptionHandler` methods catch exceptions from *every* controller, giving you one consistent error-response shape. For REST APIs you use **`@RestControllerAdvice`** (it's `@ControllerAdvice` + `@ResponseBody`) so error bodies serialize to JSON automatically.\n\nSince Spring 6 you don't invent the error body either. **`ProblemDetail`** is the built-in RFC 7807 type — `type`, `title`, `status`, `detail`, `instance` — so a hand-rolled `ErrorResponse` DTO is the 2019 answer.",
         explanation: `\`\`\`java
 // WITHOUT global handling — every controller repeats try/catch, inconsistent errors
 @PostMapping("/users")
@@ -3335,7 +3335,7 @@ This is how production APIs keep error responses **uniform** — every endpoint 
       {
         id: 75,
         text: "What HTTP status codes are commonly used, and how do you return custom status codes from a controller?",
-        answer: "The core set: **200 OK** (success), **201 Created** (new resource, with a `Location` header), **204 No Content** (success, empty body), **400 Bad Request** (client sent garbage/validation failure), **401 Unauthorized** (not logged in), **403 Forbidden** (logged in but no permission), **404 Not Found**, **409 Conflict** (duplicate), **500 Internal Server Error** (your bug). You return a custom status two ways: **`ResponseEntity.status(code).body(obj)`** for dynamic runtime control, or **`@ResponseStatus(code)`** for a fixed status on a method or exception class.",
+        answer: "The core set: **200 OK** (success), **201 Created** (new resource, with a `Location` header), **204 No Content** (success, empty body), **400 Bad Request** (client sent garbage/validation failure), **401 Unauthorized** (not logged in), **403 Forbidden** (logged in but no permission), **404 Not Found**, **409 Conflict** (duplicate), **500 Internal Server Error** (your bug).\n\nYou return a custom status two ways: **`ResponseEntity.status(code).body(obj)`** for dynamic runtime control, or **`@ResponseStatus(code)`** for a fixed status on a method or exception class.",
         explanation: `\`\`\`java
 // ResponseEntity — status decided at RUNTIME, can vary per branch
 @PostMapping("/users")
@@ -3361,7 +3361,7 @@ public class UserNotFoundException extends RuntimeException { ... }
       {
         id: 76,
         text: "What is `ResponseEntity`, and when would you use it?",
-        answer: "**`ResponseEntity<T>`** is a Spring wrapper that lets a controller method set the **HTTP status code, headers, and body together** as the return value, instead of just returning a DTO. You use it whenever the response needs a **non-200 status** (201 Created, 409 Conflict), **custom headers** (`Location`, `ETag`, `X-Total-Count`), or conditional logic that picks the status at runtime. For a plain successful GET that always returns 200 with a body, returning the DTO directly is enough — don't wrap everything in `ResponseEntity` for no reason.",
+        answer: "**`ResponseEntity<T>`** is a Spring wrapper that lets a controller method set the **HTTP status code, headers, and body together** as the return value, instead of just returning a DTO.\n\nYou use it whenever the response needs a **non-200 status** (201 Created, 409 Conflict), **custom headers** (`Location`, `ETag`, `X-Total-Count`), or conditional logic that picks the status at runtime.\n\nFor a plain successful GET that always returns 200 with a body, returning the DTO directly is enough — don't wrap everything in `ResponseEntity` for no reason.",
         explanation: `\`\`\`java
 // OVERKILL — simple 200 GET doesn't need ResponseEntity
 @GetMapping("/{id}")
@@ -3394,7 +3394,7 @@ The builder API (\`ResponseEntity.status(409).header(...).body(...)\`, plus shor
       {
         id: 77,
         text: "How do you version REST APIs?",
-        answer: "The common strategies are **URI versioning** (`/v1/users`), **header versioning** (`Accept: application/vnd.app.v2+json` or a custom `X-API-Version`), and **query-param versioning** (`/users?version=2`). URI versioning is the most widely used — it's **explicit, cacheable, and easy to route and document**, at the cost of cluttering the URL. Header versioning keeps URLs clean but is invisible in browsers and harder to test. Versioning exists so you can ship **breaking changes** without nuking existing clients. It also lets you **deprecate the old version** on a timeline instead of cutting it off overnight.",
+        answer: "The common strategies are **URI versioning** (`/v1/users`), **header versioning** (`Accept: application/vnd.app.v2+json` or a custom `X-API-Version`), and **query-param versioning** (`/users?version=2`).\n\nURI versioning is the most widely used — it's **explicit, cacheable, and easy to route and document**, at the cost of cluttering the URL. Header versioning keeps URLs clean but is invisible in browsers and harder to test.\n\nVersioning exists so you can ship **breaking changes** without nuking existing clients. It also lets you **deprecate the old version** on a timeline instead of cutting it off overnight.",
         explanation: `\`\`\`java
 // URI versioning — most common, explicit, trivial to route
 @RestController
@@ -3422,7 +3422,7 @@ public UserV2 getUserV2() { ... }
       {
         id: 78,
         text: "What is HATEOAS?",
-        answer: "**HATEOAS** (Hypermedia As The Engine Of Application State) means a REST response includes **hypermedia links** that tell the client what actions are available next — a `GET /orders/42` response carries `_links` like `self`, `cancel`, `payment`, so the client navigates by following links instead of hard-coding URLs. The server drives the state machine by advertising valid transitions, so clients stay decoupled from your URL scheme. It's a **level of REST maturity** (Richardson level 3), and in practice most APIs skip full HATEOAS because it adds payload overhead and clients usually hard-code URLs anyway.",
+        answer: "**HATEOAS** (Hypermedia As The Engine Of Application State) means a REST response includes **hypermedia links** that tell the client what actions are available next — a `GET /orders/42` response carries `_links` like `self`, `cancel`, `payment`, so the client navigates by following links instead of hard-coding URLs.\n\nThe server drives the state machine by advertising valid transitions, so clients stay decoupled from your URL scheme.\n\nIt's a **level of REST maturity** (Richardson level 3), and in practice most APIs skip full HATEOAS because it adds payload overhead and clients usually hard-code URLs anyway.",
         explanation: `\`\`\`json
 // A HATEOAS response — data + links to valid next actions
 {
@@ -3449,7 +3449,7 @@ In Spring you build these with **Spring HATEOAS** (\`EntityModel\`, \`WebMvcLink
       {
         id: 79,
         text: "How do you handle CORS in a Spring Boot application?",
-        answer: "**CORS** (Cross-Origin Resource Sharing) is the browser's security mechanism that blocks a web page from calling an API on a different origin unless the API **explicitly allows it** via `Access-Control-Allow-*` response headers. In Spring Boot you enable it three ways: **`@CrossOrigin`** on a single controller/method, **global CORS** via `WebMvcConfigurer.addCorsMappings()`, or — if **Spring Security** is present — inside the `SecurityFilterChain` with `http.cors(...)`. The critical gotcha: with Spring Security on the classpath, it owns the filter chain and **overrides the MVC CORS config**. Configure CORS inside the security chain or it silently breaks in production. The other one that bites: `allowedOrigins(\"*\")` together with `allowCredentials(true)` is **rejected at startup** — use `allowedOriginPatterns` instead.",
+        answer: "**CORS** (Cross-Origin Resource Sharing) is the browser's security mechanism that blocks a web page from calling an API on a different origin unless the API **explicitly allows it** via `Access-Control-Allow-*` response headers.\n\nIn Spring Boot you enable it three ways: **`@CrossOrigin`** on a single controller/method, **global CORS** via `WebMvcConfigurer.addCorsMappings()`, or — if **Spring Security** is present — inside the `SecurityFilterChain` with `http.cors(...)`.\n\nThe critical gotcha: with Spring Security on the classpath, it owns the filter chain and **overrides the MVC CORS config**. Configure CORS inside the security chain or it silently breaks in production.\n\nThe other one that bites: `allowedOrigins(\"*\")` together with `allowCredentials(true)` is **rejected at startup** — use `allowedOriginPatterns` instead.",
         explanation: `\`\`\`java
 // Per-controller — quick for one endpoint
 @CrossOrigin(origins = "https://app.example.com")
@@ -3482,7 +3482,7 @@ public class CorsConfig implements WebMvcConfigurer {
       {
         id: 80,
         text: "What is content negotiation in Spring MVC?",
-        answer: "**Content negotiation** is how Spring decides the **response format** (JSON, XML, etc.) based on what the client asks for — primarily the **`Accept`** request header — and, on the input side, how it reads the request body based on **`Content-Type`**. The client sends `Accept: application/xml`, Spring picks the `HttpMessageConverter` that produces XML, serializes the response, and if no converter can satisfy the requested type it returns **406 Not Acceptable**. Most REST APIs just default to JSON and ignore this, but it's the mechanism behind serving the same endpoint in multiple formats.",
+        answer: "**Content negotiation** is how Spring decides the **response format** (JSON, XML, etc.) based on what the client asks for — primarily the **`Accept`** request header — and, on the input side, how it reads the request body based on **`Content-Type`**.\n\nThe client sends `Accept: application/xml`, Spring picks the `HttpMessageConverter` that produces XML, serializes the response, and if no converter can satisfy the requested type it returns **406 Not Acceptable**.\n\nMost REST APIs just default to JSON and ignore this, but it's the mechanism behind serving the same endpoint in multiple formats.",
         explanation: `\`\`\`java
 // Same endpoint, different response format based on the Accept header
 @GetMapping(value = "/users/{id}", produces = {"application/json", "application/xml"})
@@ -3504,7 +3504,7 @@ public User getUser(@PathVariable Long id) {
       {
         id: 81,
         text: "How do you document REST APIs (Swagger/OpenAPI)?",
-        answer: "You document REST APIs with **OpenAPI 3** (the current standard, formerly Swagger), and in Spring Boot you integrate it via **`springdoc-openapi`**, which auto-generates an OpenAPI spec at `/v3/api-docs` and a **Swagger UI** at `/swagger-ui.html` by introspecting your `@RestController` classes — zero config. You enrich it with annotations like `@Operation`, `@ApiResponse`, and `@Schema` to describe endpoints, parameters, and DTO fields. This gives clients live, interactive docs and a machine-readable contract without hand-writing a spec.",
+        answer: "You document REST APIs with **OpenAPI 3** (the current standard, formerly Swagger), and in Spring Boot you integrate it via **`springdoc-openapi`**, which auto-generates an OpenAPI spec at `/v3/api-docs` and a **Swagger UI** at `/swagger-ui.html` by introspecting your `@RestController` classes — zero config.\n\nYou enrich it with annotations like `@Operation`, `@ApiResponse`, and `@Schema` to describe endpoints, parameters, and DTO fields.\n\nThis gives clients live, interactive docs and a machine-readable contract without hand-writing a spec.",
         explanation: `\`\`\`java
 // springdoc-openapi picks this up automatically; annotations add detail
 @Operation(summary = "Get user by ID", description = "Returns a single user")
@@ -3538,7 +3538,7 @@ public User getUser(
       {
         id: 82,
         text: "What is the difference between PUT, PATCH, and POST?",
-        answer: "**POST** creates a new resource where the **server assigns the ID** (`POST /users` → new user) and is **not idempotent** — repeating it creates duplicates. **PUT** does a **full replacement** of a resource at a known URL (`PUT /users/1` with the whole object) and **is idempotent** — calling it N times leaves the same state. **PATCH** does a **partial update** — you send only the fields that change (`PATCH /users/1` with `{email}`), and it's *not guaranteed* idempotent. The core divider is **idempotency and full-vs-partial**, not just the verb.",
+        answer: "**POST** creates a new resource where the **server assigns the ID** (`POST /users` → new user) and is **not idempotent** — repeating it creates duplicates.\n\n**PUT** does a **full replacement** of a resource at a known URL (`PUT /users/1` with the whole object) and **is idempotent** — calling it N times leaves the same state.\n\n**PATCH** does a **partial update** — you send only the fields that change (`PATCH /users/1` with `{email}`), and it's *not guaranteed* idempotent.\n\nThe core divider is **idempotency and full-vs-partial**, not just the verb.",
         explanation: `\`\`\`java
 // POST — server assigns ID, NOT idempotent (repeat = duplicate)
 @PostMapping("/users")
@@ -3569,7 +3569,7 @@ public User patch(@PathVariable Long id, @RequestBody Map<String, Object> change
       {
         id: 83,
         text: "How do you implement pagination and sorting in a REST API?",
-        answer: "You expose pagination through **query parameters** — `?page=0&size=20&sort=createdAt,desc` — and in Spring Boot you accept a **`Pageable`** parameter in the controller, which Spring binds automatically from those params and passes straight to `repository.findAll(pageable)`, returning a **`Page<T>`** with the content, total element count, total pages, and current page info. The response should include the **content array plus totalElements and page metadata** so the client can render \"page 3 of 12\" and build navigation. The non-negotiable rule: **never expose an unbounded list endpoint** — always cap the page size so a `?size=1000000` can't OOM your DB.",
+        answer: "You expose pagination through **query parameters** — `?page=0&size=20&sort=createdAt,desc` — and in Spring Boot you accept a **`Pageable`** parameter in the controller, which Spring binds automatically from those params and passes straight to `repository.findAll(pageable)`, returning a **`Page<T>`** with the content, total element count, total pages, and current page info.\n\nThe response should include the **content array plus totalElements and page metadata** so the client can render \"page 3 of 12\" and build navigation.\n\nThe non-negotiable rule: **never expose an unbounded list endpoint** — always cap the page size so a `?size=1000000` can't OOM your DB.",
         explanation: `\`\`\`java
 // WRONG — unbounded SELECT *, will OOM on a big table
 @GetMapping("/orders")
