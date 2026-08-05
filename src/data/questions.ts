@@ -5841,7 +5841,7 @@ class OrderApiIT {
       {
         id: 133,
         text: "What is the difference between Maven and Gradle?",
-        answer: "Both compile your code and resolve dependencies — the difference is how you describe the build. **Maven** is declarative XML with a fixed lifecycle, so it's verbose but every Maven project looks the same and any developer can read it. **Gradle** is a Groovy or Kotlin script, so it's far more concise and flexible, at the risk of the build becoming its own codebase nobody wants to touch. Gradle is usually **faster** because of incremental builds and a warm daemon. For a standard Spring Boot service either works, and most teams pick Maven for predictability.",
+        answer: "Both compile your code and resolve dependencies — the difference is how you describe the build.\n\n**Maven** is declarative XML with a fixed lifecycle, so it's verbose but every Maven project looks the same and any developer can read it.\n\n**Gradle** is a Groovy or Kotlin script, so it's far more concise and flexible, at the risk of the build becoming its own codebase nobody wants to touch.\n\nGradle is usually **faster** because of incremental builds and a warm daemon. For a standard Spring Boot service either works, and most teams pick Maven for predictability.",
         explanation: `The same dependency, both ways:
 
 \`\`\`xml
@@ -5871,7 +5871,7 @@ dependencies {
       {
         id: 134,
         text: "What is the Maven lifecycle, and what are common phases (compile, test, package, install)?",
-        answer: "Maven runs a **fixed, ordered sequence of phases**, and asking for one runs every phase before it too. The default lifecycle is `validate` → `compile` → `test` → `package` → `verify` → `install` → `deploy`. So `mvn package` validates, compiles, runs your unit tests, and only then builds the JAR — you never run these individually. `clean` belongs to a separate lifecycle, which is why you write `mvn clean package` to wipe `target/` first. That cumulative behaviour is the one thing to remember.",
+        answer: "Maven runs a **fixed, ordered sequence of phases**, and asking for one runs every phase before it too.\n\nThe default lifecycle is `validate` → `compile` → `test` → `package` → `verify` → `install` → `deploy`. So `mvn package` validates, compiles, runs your unit tests, and only then builds the JAR — you never run these individually.\n\n`clean` belongs to a separate lifecycle, which is why you write `mvn clean package` to wipe `target/` first. That cumulative behaviour is the one thing to remember.",
         explanation: `\`\`\`bash
 mvn compile        # validate + compile -> target/classes
 mvn test           # ...+ run unit tests (surefire)
@@ -5897,7 +5897,7 @@ mvn clean verify   # 'clean' is a DIFFERENT lifecycle, so you name it explicitly
       {
         id: 135,
         text: "What is dependency management in Maven, and how do you resolve version conflicts?",
-        answer: "Maven pulls **transitive dependencies** automatically, so two libraries you declared can each drag in a different version of the same jar. Maven picks one by **nearest-wins**: the version at the shallowest depth in the dependency tree, with ties going to whichever was declared first. You see the whole picture with `mvn dependency:tree`. To take control, pin the version yourself in `<dependencyManagement>` or import a **BOM** — which is exactly what `spring-boot-starter-parent` does — and use `<exclusions>` to cut a specific transitive jar. The reason this matters is that getting it wrong fails at **runtime** with `NoSuchMethodError`, not at build time.",
+        answer: "Maven pulls **transitive dependencies** automatically, so two libraries you declared can each drag in a different version of the same jar. Maven picks one by **nearest-wins**: the version at the shallowest depth in the dependency tree, with ties going to whichever was declared first.\n\nYou see the whole picture with `mvn dependency:tree`. To take control, pin the version yourself in `<dependencyManagement>` or import a **BOM** — which is exactly what `spring-boot-starter-parent` does — and use `<exclusions>` to cut a specific transitive jar.\n\nThe reason this matters is that getting it wrong fails at **runtime** with `NoSuchMethodError`, not at build time.",
         explanation: `\`\`\`bash
 $ mvn dependency:tree
 [INFO] com.acme:order-service
@@ -5937,7 +5937,7 @@ $ mvn dependency:tree
       {
         id: 136,
         text: "What is the difference between `git merge` and `git rebase`?",
-        answer: "**`git merge`** joins two branches with a **merge commit**, preserving the true history including the fact that work happened in parallel. **`git rebase`** replays your commits one at a time on top of the target branch, giving a **linear history** with no merge commit. The catch is that every replayed commit is a **new commit with a new hash**. That rewriting is the whole rule. Rebase your own local branch to tidy it before opening a PR; merge when you're combining branches other people have. Never rebase anything someone else has already pulled.",
+        answer: "**`git merge`** joins two branches with a **merge commit**, preserving the true history including the fact that work happened in parallel.\n\n**`git rebase`** replays your commits one at a time on top of the target branch, giving a **linear history** with no merge commit.\n\nThe catch is that every replayed commit is a **new commit with a new hash**. That rewriting is the whole rule.\n\nRebase your own local branch to tidy it before opening a PR; merge when you're combining branches other people have. Never rebase anything someone else has already pulled.",
         explanation: `\`\`\`bash
 # Starting point: you branched off main, then main moved on.
 #   main    A---B---C
@@ -5967,7 +5967,7 @@ git rebase main     # -> D and E are REPLAYED on top of C as new commits
       {
         id: 137,
         text: "What is a merge conflict, and how do you resolve it?",
-        answer: "A conflict happens when two branches changed **the same lines of the same file** and Git can't decide which version to keep. Git stops, writes both versions into the file between `<<<<<<<`, `=======`, and `>>>>>>>` markers, and waits for you. You resolve it by editing the file into what the code should actually be, markers deleted, then `git add` that file. Finish with `git commit` for a merge, or `git rebase --continue` for a rebase. If it's going badly, `git merge --abort` or `git rebase --abort` puts you back exactly where you started. The real fix is prevention: small branches merged often.",
+        answer: "A conflict happens when two branches changed **the same lines of the same file** and Git can't decide which version to keep. Git stops, writes both versions into the file between `<<<<<<<`, `=======`, and `>>>>>>>` markers, and waits for you.\n\nYou resolve it by editing the file into what the code should actually be, markers deleted, then `git add` that file. Finish with `git commit` for a merge, or `git rebase --continue` for a rebase.\n\nIf it's going badly, `git merge --abort` or `git rebase --abort` puts you back exactly where you started. The real fix is prevention: small branches merged often.",
         explanation: `\`\`\`java
 public BigDecimal total() {
 <<<<<<< HEAD                          // what's on the branch you're merging INTO
@@ -5998,7 +5998,7 @@ public BigDecimal total() {
       {
         id: 138,
         text: "What is the difference between `git fetch` and `git pull`?",
-        answer: "**`git fetch`** downloads new commits from the remote and updates your remote-tracking branches like `origin/main`, but changes **nothing** in your working directory or your current branch. **`git pull`** is `fetch` followed immediately by `merge` — so it moves your branch, touches your files, and can drop you into a conflict on the spot. Fetch is always safe; pull is the one that surprises you. Fetch first when you want to see what landed before integrating it, especially on a branch you're mid-way through.",
+        answer: "**`git fetch`** downloads new commits from the remote and updates your remote-tracking branches like `origin/main`, but changes **nothing** in your working directory or your current branch.\n\n**`git pull`** is `fetch` followed immediately by `merge` — so it moves your branch, touches your files, and can drop you into a conflict on the spot.\n\nFetch is always safe; pull is the one that surprises you. Fetch first when you want to see what landed before integrating it, especially on a branch you're mid-way through.",
         explanation: `\`\`\`bash
 git fetch origin                  # safe: updates origin/main, touches nothing of yours
 git log --oneline HEAD..origin/main   # what landed that I don't have?
@@ -6021,7 +6021,7 @@ git pull --rebase                 # = fetch + rebase: replays YOUR commits on to
       {
         id: 139,
         text: "What is CI/CD, and have you worked with any pipelines (Jenkins, GitHub Actions)?",
-        answer: "**CI** means every push automatically builds the project and runs the test suite, so integration problems show up in minutes instead of at merge time. **CD** takes that verified build onward. **Continuous delivery** means every green build is *deployable* and a human clicks release; **continuous deployment** means it ships automatically with no gate. A typical Spring Boot pipeline is: build and unit test, integration tests, build a Docker image, push it to a registry, deploy to staging, then production. The rule that makes any of it worth having is that the pipeline is the **only** path to production, and a red build blocks the merge.",
+        answer: "**CI** means every push automatically builds the project and runs the test suite, so integration problems show up in minutes instead of at merge time.\n\n**CD** takes that verified build onward. **Continuous delivery** means every green build is *deployable* and a human clicks release; **continuous deployment** means it ships automatically with no gate.\n\nA typical Spring Boot pipeline is: build and unit test, integration tests, build a Docker image, push it to a registry, deploy to staging, then production.\n\nThe rule that makes any of it worth having is that the pipeline is the **only** path to production, and a red build blocks the merge.",
         explanation: `\`\`\`yaml
 # .github/workflows/build.yml — a realistic minimum for a Spring Boot service
 name: build
@@ -6062,7 +6062,7 @@ jobs:
       {
         id: 140,
         text: "What is Docker, and how do you containerize a Spring Boot application?",
-        answer: "Docker packages your application together with its runtime and dependencies into an **image**, which runs identically on any machine with Docker — that's what kills \"works on my machine\". For a Spring Boot app the minimum is a `Dockerfile` that starts from a JRE base image, copies the fat JAR in, and sets `ENTRYPOINT [\"java\",\"-jar\",\"app.jar\"]`. Better is a **multi-stage build**: one stage with the JDK and Maven to compile, and a final stage holding only a JRE and the JAR. That way you don't ship your source code and build tools to production. You can also skip the Dockerfile entirely with `./mvnw spring-boot:build-image`, which uses Cloud Native Buildpacks.",
+        answer: "Docker packages your application together with its runtime and dependencies into an **image**, which runs identically on any machine with Docker — that's what kills \"works on my machine\".\n\nFor a Spring Boot app the minimum is a `Dockerfile` that starts from a JRE base image, copies the fat JAR in, and sets `ENTRYPOINT [\"java\",\"-jar\",\"app.jar\"]`.\n\nBetter is a **multi-stage build**: one stage with the JDK and Maven to compile, and a final stage holding only a JRE and the JAR. That way you don't ship your source code and build tools to production.\n\nYou can also skip the Dockerfile entirely with `./mvnw spring-boot:build-image`, which uses Cloud Native Buildpacks.",
         explanation: `\`\`\`bash
 # Stage 1 — build. Needs the full JDK and Maven; none of it ships.
 FROM maven:3.9-eclipse-temurin-21 AS build
@@ -6096,7 +6096,7 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
       {
         id: 141,
         text: "What is the purpose of a Dockerfile vs docker-compose?",
-        answer: "A **Dockerfile** describes how to build **one image**. **docker-compose** describes how to run **several containers together** — your app plus Postgres plus Redis. Their networks, volumes, ports, and environment all sit in one `docker-compose.yml`, started with a single `docker compose up`. They're not alternatives: compose normally *builds* from your Dockerfile and then runs that image alongside its dependencies. Compose is a local-development and small-deployment tool. On Kubernetes you don't use it at all, because Deployments and Services do that job.",
+        answer: "A **Dockerfile** describes how to build **one image**.\n\n**docker-compose** describes how to run **several containers together** — your app plus Postgres plus Redis. Their networks, volumes, ports, and environment all sit in one `docker-compose.yml`, started with a single `docker compose up`.\n\nThey're not alternatives: compose normally *builds* from your Dockerfile and then runs that image alongside its dependencies.\n\nCompose is a local-development and small-deployment tool. On Kubernetes you don't use it at all, because Deployments and Services do that job.",
         explanation: `\`\`\`yaml
 # docker-compose.yml — the whole local stack in one command
 services:
@@ -6137,7 +6137,7 @@ volumes:
       {
         id: 142,
         text: "What is Kubernetes, and what is its role in deploying microservices?",
-        answer: "Kubernetes is a **container orchestrator**. You declare the desired state — ten replicas of this image, this much memory, this port — and it continuously makes reality match. That means restarting crashed containers, rescheduling off dead nodes, and rolling out new versions without downtime. For microservices it supplies the platform work you'd otherwise build yourself: **service discovery** through cluster DNS, load balancing, config and secrets, health checking, and autoscaling. The four objects worth being able to name:\n\n- **Pod** — one or more containers running together, sharing a network namespace\n- **Deployment** — keeps N pods of a version alive and handles rolling updates\n- **Service** — a stable address and load balancer in front of changing pods\n- **Ingress** — routes external HTTP traffic into the cluster",
+        answer: "Kubernetes is a **container orchestrator**. You declare the desired state — ten replicas of this image, this much memory, this port — and it continuously makes reality match.\n\nThat means restarting crashed containers, rescheduling off dead nodes, and rolling out new versions without downtime.\n\nFor microservices it supplies the platform work you'd otherwise build yourself: **service discovery** through cluster DNS, load balancing, config and secrets, health checking, and autoscaling. The four objects worth being able to name:\n\n- **Pod** — one or more containers running together, sharing a network namespace\n- **Deployment** — keeps N pods of a version alive and handles rolling updates\n- **Service** — a stable address and load balancer in front of changing pods\n- **Ingress** — routes external HTTP traffic into the cluster",
         explanation: `\`\`\`yaml
 apiVersion: apps/v1
 kind: Deployment                    # keeps 3 pods running; handles the rolling update
