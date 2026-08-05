@@ -5863,8 +5863,7 @@ dependencies {
 
 **Why Maven still wins by default in the Spring world:** the XML is rigid, and rigidity is the feature — there's one obvious way to do things, so a new joiner reads the POM and knows the build. Gradle's speed advantage is real on large multi-module projects, which is why Android standardised on it, but on a single service that builds in 30 seconds you'll never notice it. Use the **wrapper** either way (\`mvnw\` / \`gradlew\`) so CI and every laptop build with the same tool version.`,
         followUps: [
-          { text: "What are pros of Gradle's incremental builds and Kotlin DSL?" },
-          { text: "Why do many Spring Boot projects still default to Maven?" },
+          { text: "Does Gradle's speed advantage matter on a single Boot service?" },
           { text: "How do you run a Boot app with each tool?" },
         ],
       },
@@ -5891,7 +5890,7 @@ mvn clean verify   # 'clean' is a DIFFERENT lifecycle, so you name it explicitly
         followUps: [
           { text: "What is the difference between `package` and `install`?" },
           { text: "How do plugins bind to lifecycle phases?" },
-          { text: "What does `mvn clean verify` run?" },
+          { text: "Why does CI run `mvn clean verify` rather than `install`?" },
         ],
       },
       {
@@ -5929,9 +5928,9 @@ $ mvn dependency:tree
 
 **Useful second command:** \`mvn dependency:tree -Dincludes=com.fasterxml.jackson.core\` filters a large tree down to the one library you're chasing, which beats reading 400 lines of output.`,
         followUps: [
-          { text: "What is nearest-wins and dependency mediation?" },
-          { text: "How does `dependencyManagement` / BOM help (e.g., Spring Boot parent)?" },
-          { text: "How do you find and exclude transitive dependencies?" },
+          { text: "Does Maven pick the newest version when two libraries disagree?" },
+          { text: "Your company already has a parent POM. How do you still get Boot's version management?" },
+          { text: "When is excluding a transitive dependency the wrong fix?" },
         ],
       },
       {
@@ -5959,7 +5958,7 @@ git rebase main     # -> D and E are REPLAYED on top of C as new commits
 
 **What linear history buys you** is readable \`git log\` and usable \`git bisect\`: every commit is a real state of the project, so bisecting to find the commit that introduced a bug actually converges. A history dense with merge commits makes both harder to read. Common team compromise: rebase your feature branch onto \`main\` to keep it current, then merge the PR with a merge commit or a squash so \`main\` records one entry per feature.`,
         followUps: [
-          { text: "When is rebase dangerous on shared branches?" },
+          { text: "What happens to a colleague when you rebase a branch they've already pulled?" },
           { text: "What does a linear history buy you?" },
           { text: "How do you resolve conflicts in each workflow?" },
         ],
@@ -5990,9 +5989,9 @@ public BigDecimal total() {
 
 **Prevention is the real answer**, and it's what an interviewer is listening for. Conflicts scale with **how long a branch lives and how much it touches**. A branch open for two weeks that reformats a shared class will conflict with everything; a branch merged daily rarely conflicts at all. Pull \`main\` into your branch often rather than at the end, keep PRs small, and agree formatting rules in the toolchain so nobody's IDE reformats a file and collides with every other change in it.`,
         followUps: [
-          { text: "What markers appear in conflicted files?" },
-          { text: "How do you abort a merge or rebase mid-conflict?" },
-          { text: "How do code reviews help prevent painful conflicts?" },
+          { text: "During a rebase, which side of a conflict is HEAD?" },
+          { text: "You're halfway through a bad rebase. What can Git recover?" },
+          { text: "Which conflicts does Git merge cleanly and still leave broken?" },
         ],
       },
       {
@@ -6014,7 +6013,7 @@ git pull --rebase                 # = fetch + rebase: replays YOUR commits on to
 **A fast-forward merge** is what happens when your branch has no commits of its own and the remote has simply moved ahead: Git doesn't need a merge commit, it just slides your branch pointer forward to the newer commit. That's why pulling on an untouched \`main\` produces no merge commit at all, and why "fast-forward" shows up in the output.`,
         followUps: [
           { text: "What does `git pull --rebase` do?" },
-          { text: "Why might you prefer fetch + inspect before merging?" },
+          { text: "What do you run between a fetch and deciding to merge?" },
           { text: "What is a fast-forward merge?" },
         ],
       },
@@ -6054,9 +6053,9 @@ jobs:
 
 **Delivery vs deployment** is the distinction interviewers actually probe. Continuous *delivery* stops at a human approval gate, which is what most teams with a real change-management process run. Continuous *deployment* removes the gate entirely, and it only works if you genuinely trust the tests — plus feature flags and fast rollback to limit the blast radius of a bad change.`,
         followUps: [
-          { text: "What stages would you put in a Spring Boot pipeline?" },
+          { text: "Why tag images with the commit SHA rather than `latest`?" },
           { text: "How do you keep secrets in CI?" },
-          { text: "What is the difference between continuous delivery and continuous deployment?" },
+          { text: "What has to be true before continuous deployment is safe?" },
         ],
       },
       {
@@ -6088,7 +6087,7 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 
 **Configuration comes in as environment variables**, never baked into the image — that's the whole point of one artifact per build. \`docker run -e SPRING_PROFILES_ACTIVE=prod -e SPRING_DATASOURCE_URL=... -p 8080:8080 order-service:abc123\`. Relaxed binding maps those underscored names onto \`spring.datasource.url\`, so no code or image change is needed per environment.`,
         followUps: [
-          { text: "What would a multi-stage Dockerfile for a Boot JAR look like at a high level?" },
+          { text: "Why copy `pom.xml` before `src` in a multi-stage build?" },
           { text: "Why use a JRE-only base image in the final stage?" },
           { text: "How do you pass env vars / profiles into a container?" },
         ],
@@ -6129,9 +6128,8 @@ volumes:
 
 **Not for production Kubernetes.** Compose has no scheduling, no self-healing, no rolling updates, no autoscaling, and no multi-node story. Kubernetes replaces it with Deployments, Services, and ConfigMaps. Compose stays genuinely useful for local development and CI — and it's worth noting **Testcontainers covers the same ground for integration tests**, starting the same dependencies from inside the test itself.`,
         followUps: [
-          { text: "When do you use compose for local dev with DB + app + Redis?" },
+          { text: "Your app crashes on boot because Postgres isn't ready. How do you fix that in compose?" },
           { text: "How do volumes and networks work in compose?" },
-          { text: "Is compose typically used in production Kubernetes environments?" },
         ],
       },
       {
@@ -6168,7 +6166,6 @@ spec:
 
 **Horizontal Pod Autoscaling** watches a metric, typically CPU or a custom Micrometer metric, and adjusts \`replicas\` between a floor and a ceiling. It only works if your app is **stateless**, since any pod can vanish at any time — which is the same constraint that makes sticky sessions and in-memory rate limiting a bad idea.`,
         followUps: [
-          { text: "What are Pod, Deployment, Service, and Ingress?" },
           { text: "How do liveness and readiness probes relate to Spring Actuator?" },
           { text: "What is horizontal pod autoscaling at a high level?" },
         ],
