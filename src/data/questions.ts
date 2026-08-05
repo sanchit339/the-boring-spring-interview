@@ -2708,8 +2708,6 @@ public class StripePaymentGateway {
 }
 \`\`\`
 
-**Precedence, highest wins:** **command-line arguments** (\`--server.port=9090\`) beat everything, then \`SPRING_APPLICATION_JSON\`, then **Java system properties** (\`-Dserver.port=9090\`), then **OS environment variables** (\`SERVER_PORT=9090\`), then **profile-specific files** (\`application-prod.yml\`), then plain \`application.yml\`. At the same level, a file sitting **outside** the jar beats the one packaged inside it. Note the order of the middle two — \`-D\` system properties outrank environment variables, which trips people up because env vars feel more "external".
-
 **Production Trap:** Never commit passwords, API keys, or database credentials into \`application.yml\` in source control. Store secrets in environment variables or cloud key vaults (AWS Secrets Manager, HashiCorp Vault).`,
         followUps: [
           { text: "What is the property source precedence order?" },
@@ -2831,7 +2829,7 @@ logging.level.web=DEBUG
 
 **Important gotcha:** DevTools triggers automatic restarts only when classpath files change. If using IntelliJ IDEA, you must press \`Ctrl+F9\` (or \`Cmd+F9\` on Mac) to compile your modified Java files, or enable "Build project automatically" in settings.`,
         followUps: [
-          { text: "Which property defaults does DevTools change in development?" },
+          { text: "Why doesn't a change to a library jar trigger a DevTools restart?" },
         ],
       },
       {
@@ -2870,7 +2868,7 @@ public class SecurityConfig {
 
 **Real-world usefulness:** The \`/actuator/loggers\` endpoint lets you temporarily bump package log levels to \`TRACE\` on a running production instance via a \`POST\` request, allowing you to debug live issues without restarting the pod!`,
         followUps: [
-          { text: "Which endpoints would you expose in production, and how do you secure them?" },
+          { text: "What is the difference between disabling an endpoint and not exposing it?" },
           { text: "How do you customize health status aggregation?" },
         ],
       },
@@ -2921,7 +2919,7 @@ public class PaymentGatewayHealthIndicator implements HealthIndicator {
       {
         id: 63,
         text: "What embedded servers does Spring Boot support?",
-        answer: "Spring Boot supports three embedded Servlet containers: **Apache Tomcat** (the default for `spring-boot-starter-web`), **Eclipse Jetty**, and **Red Hat Undertow**, alongside **Netty** for reactive applications (`spring-boot-starter-webflux`).\n\nYou switch embedded servers by excluding Tomcat from `spring-boot-starter-web` and adding your preferred server starter (like `spring-boot-starter-undertow`) in Maven or Gradle. Embedded servers eliminate the need to install and configure standalone Tomcat application servers on host servers.\n\nLeaving two server starters on the classpath doesn't fail — the auto-configuration is ordered Tomcat, Jetty, Undertow, each guarded by `@ConditionalOnMissingBean`, so **Tomcat silently wins**. That's the actual bug: you add Undertow, tune its properties, and nothing changes because you never excluded Tomcat.",
+        answer: "Spring Boot supports three embedded Servlet containers: **Apache Tomcat** (the default for `spring-boot-starter-web`), **Eclipse Jetty**, and **Red Hat Undertow**, alongside **Netty** for reactive applications (`spring-boot-starter-webflux`).\n\nYou switch by excluding `spring-boot-starter-tomcat` from `spring-boot-starter-web` and adding the starter you want in its place. Either way the server ships inside your jar, so there's no container to install or patch on the host.\n\nLeaving two server starters on the classpath doesn't fail — the auto-configuration is ordered Tomcat, Jetty, Undertow, each guarded by `@ConditionalOnMissingBean`, so **Tomcat silently wins**. That's the actual bug: you add Undertow, tune its properties, and nothing changes because you never excluded Tomcat.",
         explanation: `\`\`\`xml
 <!-- Switching from default Tomcat to Undertow in Maven -->
 <dependency>
@@ -3087,7 +3085,7 @@ java -Xmx512m -jar target/order-service-1.0.0.jar --server.port=8080
 **How executable JARs work internally:**
 Spring Boot uses a custom \`JarLauncher\` that allows nesting JAR dependencies inside \`BOOT-INF/lib/\` within a single ZIP structure without needing to explode dependencies onto host file systems.`,
         followUps: [
-          { text: "What is an executable fat/uber JAR?" },
+          { text: "How does `java -jar` load dependencies that are themselves jars inside the jar?" },
           { text: "How do you run a Boot JAR with external config?" },
         ],
       },
