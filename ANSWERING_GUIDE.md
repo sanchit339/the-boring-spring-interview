@@ -188,7 +188,7 @@ is correct as-is.
 
 ## 6. Current coverage
 
-158 questions, 413 followups, **413 answered / 0 missing** — all 12 categories complete.
+158 questions, 410 followups, **410 answered / 0 missing** — all 12 categories complete.
 
 Followup count is **at most 3, not exactly 3**. Prune rather than pad — see
 `answer_rules.md` Rule 7. Ten `core-java`, three `oop` and nine `spring-core`
@@ -220,7 +220,7 @@ when something is.
 | `security` | Q103–Q112 | 10 | 10/10 | 10/10 | 27/27 |
 | `microservices` | Q113–Q124 | 12 | 12/12 | 12/12 | 33/33 |
 | `testing` | Q125–Q132 | 8 | 8/8 | 8/8 | 23/23 |
-| `build-git` | Q133–Q142 | 10 | 10/10 | 10/10 | 30/30 |
+| `build-git` | Q133–Q142 | 10 | 10/10 | 10/10 | 27/27 |
 | `system-design` | Q143–Q152 | 10 | 10/10 | 10/10 | 30/30 |
 | `behavioral` | Q153–Q158 | 6 | 6/6 | 6/6 | 18/18 |
 
