@@ -188,7 +188,7 @@ is correct as-is.
 
 ## 6. Current coverage
 
-158 questions, 420 followups, **420 answered / 0 missing** — all 12 categories complete.
+158 questions, 417 followups, **417 answered / 0 missing** — all 12 categories complete.
 
 Followup count is **at most 3, not exactly 3**. Prune rather than pad — see
 `answer_rules.md` Rule 7. Ten `core-java`, three `oop` and nine `spring-core`
@@ -217,7 +217,7 @@ when something is.
 | `spring-boot` | Q53–Q68 | 16 | 16/16 | 16/16 | 35/35 |
 | `spring-mvc-rest` | Q69–Q83 | 15 | 15/15 | 15/15 | 31/31 |
 | `spring-data-jpa` | Q84–Q102 | 19 | 19/19 | 19/19 | 52/52 |
-| `security` | Q103–Q112 | 10 | 10/10 | 10/10 | 30/30 |
+| `security` | Q103–Q112 | 10 | 10/10 | 10/10 | 27/27 |
 | `microservices` | Q113–Q124 | 12 | 12/12 | 12/12 | 36/36 |
 | `testing` | Q125–Q132 | 8 | 8/8 | 8/8 | 24/24 |
 | `build-git` | Q133–Q142 | 10 | 10/10 | 10/10 | 30/30 |
