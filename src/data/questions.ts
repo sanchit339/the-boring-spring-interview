@@ -6182,7 +6182,7 @@ spec:
       {
         id: 143,
         text: "How would you design a URL shortener service?",
-        answer: "Two endpoints: `POST /urls` stores the long URL and returns a short code, and `GET /{code}` looks it up and issues a **redirect**. The interesting parts are code generation and read scale. Generate codes by **base62-encoding an auto-increment id** — seven characters covers 3.5 trillion URLs — rather than hashing the URL, because hashes collide and force a retry loop. Traffic is overwhelmingly **read-heavy**, often 100:1, so the redirect path should hit **Redis** with the database only as a fallback. Use a **302** rather than a 301 if you want click analytics, because browsers cache a 301 and you never see the second click.",
+        answer: "Two endpoints: `POST /urls` stores the long URL and returns a short code, and `GET /{code}` looks it up and issues a **redirect**.\n\nThe interesting parts are code generation and read scale. Generate codes by **base62-encoding an auto-increment id** — seven characters covers 3.5 trillion URLs — rather than hashing the URL, because hashes collide and force a retry loop.\n\nTraffic is overwhelmingly **read-heavy**, often 100:1, so the redirect path should hit **Redis** with the database only as a fallback.\n\nUse a **302** rather than a 301 if you want click analytics, because browsers cache a 301 and you never see the second click.",
         explanation: `\`\`\`sql
 -- The whole schema. Note what's indexed and what isn't.
 CREATE TABLE short_url (
@@ -6227,7 +6227,7 @@ public ResponseEntity<Void> redirect(@PathVariable String code) {
       {
         id: 144,
         text: "How would you design a rate limiter for an API?",
-        answer: "You cap how many requests a client can make in a time window, keyed by API key, user id, or IP. **Token bucket** is the usual pick: the bucket refills at a steady rate and each request spends a token, so short bursts are allowed while the long-run average stays capped. That's what Spring Cloud Gateway's `RequestRateLimiter` implements. The critical design point is that the counters must live **outside the instance**, in Redis. Keep them in memory and each pod enforces its own separate limit, so ten pods means ten times the intended rate. Reject with **429** plus a `Retry-After` header so clients back off instead of hammering.",
+        answer: "You cap how many requests a client can make in a time window, keyed by API key, user id, or IP.\n\n**Token bucket** is the usual pick: the bucket refills at a steady rate and each request spends a token, so short bursts are allowed while the long-run average stays capped. That's what Spring Cloud Gateway's `RequestRateLimiter` implements.\n\nThe critical design point is that the counters must live **outside the instance**, in Redis. Keep them in memory and each pod enforces its own separate limit, so ten pods means ten times the intended rate.\n\nReject with **429** plus a `Retry-After` header so clients back off instead of hammering.",
         explanation: `\`\`\`yaml
 # Spring Cloud Gateway — token bucket, counters in Redis so all instances share them
 spring:
@@ -6269,7 +6269,7 @@ public boolean tryConsume(String apiKey) {
       {
         id: 145,
         text: "How would you handle a scenario where an API needs to process a large file upload without blocking the main thread?",
-        answer: "Ideally the file never passes through your API at all. Use a **pre-signed URL**: the client asks your service for a short-lived S3 URL, uploads **directly to object storage**, then tells you the key. Your JVM never touches the bytes, so file size stops being your problem. If it must go through the service, **stream it** with `MultipartFile.getInputStream()` and never `getBytes()`, which loads the whole file into heap and OOMs the pod. Then do the work **asynchronously**: accept the upload, return **202 Accepted** with a job id, and let a worker process it while the client polls that id for status. Set `spring.servlet.multipart.max-file-size` deliberately, because the default is 1MB.",
+        answer: "Ideally the file never passes through your API at all. Use a **pre-signed URL**: the client asks your service for a short-lived S3 URL, uploads **directly to object storage**, then tells you the key. Your JVM never touches the bytes, so file size stops being your problem.\n\nIf it must go through the service, **stream it** with `MultipartFile.getInputStream()` and never `getBytes()`, which loads the whole file into heap and OOMs the pod.\n\nThen do the work **asynchronously**: accept the upload, return **202 Accepted** with a job id, and let a worker process it while the client polls that id for status.\n\nSet `spring.servlet.multipart.max-file-size` deliberately, because the default is 1MB.",
         explanation: `\`\`\`java
 // GOOD — accept, hand off, return immediately. The HTTP thread is free in ~50ms.
 @PostMapping("/api/imports")
@@ -6315,7 +6315,7 @@ server:
       {
         id: 146,
         text: "How would you design a notification service that sends emails/SMS asynchronously?",
-        answer: "It **consumes events** rather than exposing a synchronous API — `OrderPlaced` lands on a queue and the notification service decides what to send to whom. That's the central decision: the order service must never wait on email, or a broken SMTP provider fails checkout. Internally it resolves the user's channel preferences, renders a **template**, and calls the provider through an adapter so Twilio or SES can be swapped. Retries use **exponential backoff** with a dead-letter queue for messages that keep failing. Store a record of every send keyed by the **event id**, because at-least-once delivery means a redelivery would otherwise email the customer twice.",
+        answer: "It **consumes events** rather than exposing a synchronous API — `OrderPlaced` lands on a queue and the notification service decides what to send to whom.\n\nThat's the central decision: the order service must never wait on email, or a broken SMTP provider fails checkout.\n\nInternally it resolves the user's channel preferences, renders a **template**, and calls the provider through an adapter so Twilio or SES can be swapped.\n\nRetries use **exponential backoff** with a dead-letter queue for messages that keep failing. Store a record of every send keyed by the **event id**, because at-least-once delivery means a redelivery would otherwise email the customer twice.",
         explanation: `\`\`\`java
 @KafkaListener(topics = "order-events", groupId = "notification-service")
 public void on(OrderPlaced event) {
@@ -6347,7 +6347,7 @@ public void on(OrderPlaced event) {
       {
         id: 147,
         text: "How do you handle caching in a Spring Boot application (`@Cacheable`, Redis)?",
-        answer: "Put **`@Cacheable`** on the method and `@EnableCaching` on a config class: Spring stores the return value keyed by the arguments, and the next call with the same arguments skips the method body entirely. Back it with **Redis** rather than the default in-memory map, so every instance shares one cache and a restart doesn't cold-start it. **`@CachePut`** always runs the method and updates the entry, and **`@CacheEvict`** removes one — you need those two to stop serving data you've just changed. Always set a **TTL**, so a stale entry heals itself instead of persisting forever. And remember it's proxy-based AOP: a call from inside the same class bypasses the cache completely.",
+        answer: "Put **`@Cacheable`** on the method and `@EnableCaching` on a config class: Spring stores the return value keyed by the arguments, and the next call with the same arguments skips the method body entirely.\n\nBack it with **Redis** rather than the default in-memory map, so every instance shares one cache and a restart doesn't cold-start it.\n\n**`@CachePut`** always runs the method and updates the entry, and **`@CacheEvict`** removes one — you need those two to stop serving data you've just changed.\n\nAlways set a **TTL**, so a stale entry heals itself instead of persisting forever. And remember it's proxy-based AOP: a call from inside the same class bypasses the cache completely.",
         explanation: `\`\`\`java
 @Service
 public class ProductService {
@@ -6396,7 +6396,7 @@ spring:
       {
         id: 148,
         text: "How would you scale a Spring Boot application to handle increased traffic?",
-        answer: "**Measure before you scale**, because adding instances usually isn't what helps first. Look at where the time actually goes: an N+1 query, a missing index, or an exhausted connection pool will not improve at all when you double the pods. Once the app itself is sane, scale **horizontally** — more instances behind a load balancer — since that's the only axis that keeps going and it's what Kubernetes does natively. The hard prerequisite is that the service is **stateless**: no in-memory session, no local files, no in-memory counters, so any instance can serve any request. Expect the **database to be the next bottleneck**, because twenty pods contending on one Postgres just moves the queue.",
+        answer: "**Measure before you scale**, because adding instances usually isn't what helps first. Look at where the time actually goes: an N+1 query, a missing index, or an exhausted connection pool will not improve at all when you double the pods.\n\nOnce the app itself is sane, scale **horizontally** — more instances behind a load balancer — since that's the only axis that keeps going and it's what Kubernetes does natively.\n\nThe hard prerequisite is that the service is **stateless**: no in-memory session, no local files, no in-memory counters, so any instance can serve any request.\n\nExpect the **database to be the next bottleneck**, because twenty pods contending on one Postgres just moves the queue.",
         explanation: `\`\`\`yaml
 # The setting that surprises people: 20 pods x 10 connections = 200 connections,
 # against a Postgres whose default max_connections is 100. Scaling out here takes
@@ -6426,7 +6426,7 @@ spring:
       {
         id: 149,
         text: "How would you debug a production issue where an API is responding slowly?",
-        answer: "Start with **metrics, not code**. Check `http.server.requests` in Actuator or your dashboard. Which endpoint, which latency percentile, and did the change line up with a deploy or a traffic spike? Then pull a **distributed trace** for a slow request. The waterfall shows which hop consumed the time — your service, a downstream, or the database. From there it's usually one of a short list: an N+1 query, a missing index, connection-pool exhaustion, a downstream call with no timeout, or GC pressure. Only once you've narrowed that far is a **thread dump** worth taking, to see where threads are actually parked. Then change one thing and confirm against the same metric.",
+        answer: "Start with **metrics, not code**. Check `http.server.requests` in Actuator or your dashboard. Which endpoint, which latency percentile, and did the change line up with a deploy or a traffic spike?\n\nThen pull a **distributed trace** for a slow request. The waterfall shows which hop consumed the time — your service, a downstream, or the database.\n\nFrom there it's usually one of a short list: an N+1 query, a missing index, connection-pool exhaustion, a downstream call with no timeout, or GC pressure.\n\nOnly once you've narrowed that far is a **thread dump** worth taking, to see where threads are actually parked. Then change one thing and confirm against the same metric.",
         explanation: `\`\`\`bash
 # Narrowing down, cheapest signal first — all read-only, all safe on a live pod.
 
@@ -6457,7 +6457,7 @@ jcmd 1 Thread.print > /tmp/threads.txt     # or /actuator/threaddump if exposed
       {
         id: 150,
         text: "How do you ensure data consistency when multiple services update related data?",
-        answer: "You accept that a single ACID transaction can't span services and design for **eventual consistency** instead. Each service commits **its own local transaction** and publishes an event; the others react. Two patterns make that reliable. The **transactional outbox** writes the event to a table in the same transaction as the business change, and a relay publishes it after commit. So you can never save the order and lose the event, or publish an event for an order that rolled back. **Idempotent consumers** handle the other half, because at-least-once delivery guarantees duplicates. For a multi-step process use a **saga** with compensating transactions, and avoid 2PC — it holds locks across the network and most things you integrate with don't support XA.",
+        answer: "You accept that a single ACID transaction can't span services and design for **eventual consistency** instead. Each service commits **its own local transaction** and publishes an event; the others react.\n\nTwo patterns make that reliable. The **transactional outbox** writes the event to a table in the same transaction as the business change, and a relay publishes it after commit. So you can never save the order and lose the event, or publish an event for an order that rolled back.\n\n**Idempotent consumers** handle the other half, because at-least-once delivery guarantees duplicates.\n\nFor a multi-step process use a **saga** with compensating transactions, and avoid 2PC — it holds locks across the network and most things you integrate with don't support XA.",
         explanation: `\`\`\`java
 // BROKEN — two systems, no shared transaction. Crash between them and you
 // have an order nobody was told about, or an event for an order that rolled back.
@@ -6502,7 +6502,7 @@ public void relay() {
       {
         id: 151,
         text: "What is asynchronous processing in Spring Boot (`@Async`), and when would you use it?",
-        answer: "`@Async` makes a method return immediately and run on **another thread** from a pool. You put `@EnableAsync` on a config class, annotate the method, and return `void` or `CompletableFuture<T>`. Use it for genuinely fire-and-forget work inside one service — sending an email, writing an audit record, warming a cache — so the HTTP thread isn't held waiting. Two limits matter. It's **proxy-based**, so calling it from another method of the same class does nothing at all, exactly like `@Transactional`. And you should **define your own executor** rather than trusting the default, sizing the pool and queue deliberately. If the work must survive a restart, use a **message queue** instead: an in-memory pool loses the task when the pod dies.",
+        answer: "`@Async` makes a method return immediately and run on **another thread** from a pool. You put `@EnableAsync` on a config class, annotate the method, and return `void` or `CompletableFuture<T>`.\n\nUse it for genuinely fire-and-forget work inside one service — sending an email, writing an audit record, warming a cache — so the HTTP thread isn't held waiting.\n\nTwo limits matter. It's **proxy-based**, so calling it from another method of the same class does nothing at all, exactly like `@Transactional`. And you should **define your own executor** rather than trusting the default, sizing the pool and queue deliberately.\n\nIf the work must survive a restart, use a **message queue** instead: an in-memory pool loses the task when the pod dies.",
         explanation: `\`\`\`java
 @Configuration
 @EnableAsync
@@ -6547,7 +6547,7 @@ public class OrderService {
       {
         id: 152,
         text: "How do you schedule recurring tasks in Spring Boot (`@Scheduled`)?",
-        answer: "Put `@EnableScheduling` on a config class and `@Scheduled` on a **no-argument** method. Three timing modes. **`fixedRate`** starts every N milliseconds regardless of how long the last run took, and **`fixedDelay`** waits N milliseconds *after* the previous run finishes. **`cron`** takes a calendar expression like `0 0 2 * * *` for 2am daily. The default scheduler is **single-threaded**, so one slow job delays every other job in the application. The trap that actually bites in production is that in a **multi-instance deployment every instance runs the job** — a nightly billing run fires three times. Guard it with **ShedLock** or a database lock so only one instance wins.",
+        answer: "Put `@EnableScheduling` on a config class and `@Scheduled` on a **no-argument** method.\n\nThree timing modes. **`fixedRate`** starts every N milliseconds regardless of how long the last run took, and **`fixedDelay`** waits N milliseconds *after* the previous run finishes. **`cron`** takes a calendar expression like `0 0 2 * * *` for 2am daily.\n\nThe default scheduler is **single-threaded**, so one slow job delays every other job in the application.\n\nThe trap that actually bites in production is that in a **multi-instance deployment every instance runs the job** — a nightly billing run fires three times. Guard it with **ShedLock** or a database lock so only one instance wins.",
         explanation: `\`\`\`java
 @Component
 public class ReportJobs {
@@ -6600,7 +6600,7 @@ spring:
       {
         id: 153,
         text: "Walk me through a project you built end-to-end using Spring Boot.",
-        answer: "Keep it to about two minutes with a fixed shape: **what the system did and who used it**, **which part was yours**, **the stack and why**, then **one problem worth talking about**. Lead with the business purpose rather than the dependency list. \"An order service that took checkout requests and coordinated payment and inventory\" tells an interviewer far more than a stack list. Say what *you* built rather than what the team shipped, because the next question is always about your specific contribution. Have one real number ready: requests per day, table size, p95 latency, team size. Finish with something you'd do differently, which reads as judgement rather than weakness.",
+        answer: "Keep it to about two minutes with a fixed shape: **what the system did and who used it**, **which part was yours**, **the stack and why**, then **one problem worth talking about**.\n\nLead with the business purpose rather than the dependency list. \"An order service that took checkout requests and coordinated payment and inventory\" tells an interviewer far more than a stack list.\n\nSay what *you* built rather than what the team shipped, because the next question is always about your specific contribution. Have one real number ready: requests per day, table size, p95 latency, team size.\n\nFinish with something you'd do differently, which reads as judgement rather than weakness.",
         explanation: `This is your own project, so the content has to be yours — what follows is the **shape** to pour it into, not a script to memorise.
 
 \`\`\`text
@@ -6634,7 +6634,7 @@ spring:
       {
         id: 154,
         text: "Describe a challenging bug you fixed in production — how did you diagnose it?",
-        answer: "Use **STAR** — situation, task, action, result — and spend most of it on the action. What's being assessed is your **diagnostic method**, not how clever the fix was. So walk the path: the symptom, the first signal you looked at, what you ruled out, and how you *confirmed* the cause instead of guessing. Say explicitly how you **stopped the bleeding** while still investigating — a rollback, a feature flag, scaling up. Mitigating before root-causing is the instinct that separates people who've been on call. Close with the result as a number if you have one, and what you changed so it can't recur: a test, an alert, a timeout.",
+        answer: "Use **STAR** — situation, task, action, result — and spend most of it on the action. What's being assessed is your **diagnostic method**, not how clever the fix was.\n\nSo walk the path: the symptom, the first signal you looked at, what you ruled out, and how you *confirmed* the cause instead of guessing.\n\nSay explicitly how you **stopped the bleeding** while still investigating — a rollback, a feature flag, scaling up. Mitigating before root-causing is the instinct that separates people who've been on call.\n\nClose with the result as a number if you have one, and what you changed so it can't recur: a test, an alert, a timeout.",
         explanation: `The bug has to be yours. This is the **structure** that makes a real one land, and the trap is spending three minutes on the symptom and ten seconds on the reasoning.
 
 \`\`\`text
@@ -6668,7 +6668,7 @@ RESULT      "Moved the external call outside the transaction, p99 back to 320ms.
       {
         id: 155,
         text: "How do you approach code reviews, and what do you look for?",
-        answer: "Read for **correctness first, then security, then readability** — in that order, because a beautifully formatted race condition is still a bug. Concretely: does it handle the null and empty cases, is there a test covering the behaviour that changed, does it log PII or leak a credential, is there an N+1 query. Leave **formatting to the toolchain** rather than to review comments. Phrase feedback as a question when you might be missing context: \"what happens if this list is empty?\". Mark clearly what's blocking versus a suggestion, so the author knows what actually stops the merge. And review **quickly**: a PR sitting for two days costs the team more than most comments save.",
+        answer: "Read for **correctness first, then security, then readability** — in that order, because a beautifully formatted race condition is still a bug.\n\nConcretely:\n\n- does it handle the null and empty cases\n- is there a test covering the behaviour that changed\n- does it log PII or leak a credential\n- is there an N+1 query\n\nLeave **formatting to the toolchain** rather than to review comments. Phrase feedback as a question when you might be missing context: \"what happens if this list is empty?\". Mark clearly what's blocking versus a suggestion, so the author knows what actually stops the merge.\n\nAnd review **quickly**: a PR sitting for two days costs the team more than most comments save.",
         explanation: `\`\`\`text
 Order matters — read for these in sequence, not all at once:
 
@@ -6697,7 +6697,7 @@ Order matters — read for these in sequence, not all at once:
       {
         id: 156,
         text: "Tell me about a time you had to optimize a slow-performing API or query.",
-        answer: "The structure is **measure, find the real bottleneck, fix one thing, measure again**. Open with a number, because \"it felt slow\" isn't a baseline and you can't demonstrate an improvement without one — p95 latency from Actuator or your APM works. Most Spring Boot slowness lives in the data layer, so check the **N+1 query** first by counting queries per request, then a missing index with `EXPLAIN ANALYZE`. Fix the cheapest real cause: a join fetch, an index, a projection that stops loading columns nobody uses. Reach for caching **after** the query is sane, not instead of fixing it — caching a bad query just hides it. Then state the after-number and what the fix cost you.",
+        answer: "The structure is **measure, find the real bottleneck, fix one thing, measure again**.\n\nOpen with a number, because \"it felt slow\" isn't a baseline and you can't demonstrate an improvement without one — p95 latency from Actuator or your APM works.\n\nMost Spring Boot slowness lives in the data layer, so check the **N+1 query** first by counting queries per request, then a missing index with `EXPLAIN ANALYZE`. Fix the cheapest real cause: a join fetch, an index, a projection that stops loading columns nobody uses.\n\nReach for caching **after** the query is sane, not instead of fixing it — caching a bad query just hides it. Then state the after-number and what the fix cost you.",
         explanation: `\`\`\`sql
 -- The measurement that usually finds it. Run the real query with real data volumes;
 -- a plan against 50 test rows tells you nothing about production.
@@ -6731,7 +6731,7 @@ CREATE INDEX CONCURRENTLY idx_orders_customer_status ON orders(customer_id, stat
       {
         id: 157,
         text: "How do you keep yourself updated with new Spring/Java features?",
-        answer: "Name **specific, checkable sources** rather than \"I read blogs\": the Spring Boot **release notes and migration guides** on GitHub, the official Spring blog, the JEP list for each new Java release, and something with editorial depth like Baeldung or InfoQ. The stronger half of the answer is **how you use them**. Read the release notes for the version you're actually on, so you learn what's deprecated before it's removed rather than during an upgrade. Then give one concrete thing you adopted and why it mattered: records for DTOs, `RestClient` replacing `RestTemplate`, virtual threads. For upgrades at work the honest process is: read the migration guide, bump in a branch, let the test suite find the breakage. Move one major version at a time.",
+        answer: "Name **specific, checkable sources** rather than \"I read blogs\": the Spring Boot **release notes and migration guides** on GitHub, the official Spring blog, the JEP list for each new Java release, and something with editorial depth like Baeldung or InfoQ.\n\nThe stronger half of the answer is **how you use them**. Read the release notes for the version you're actually on, so you learn what's deprecated before it's removed rather than during an upgrade.\n\nThen give one concrete thing you adopted and why it mattered: records for DTOs, `RestClient` replacing `RestTemplate`, virtual threads.\n\nFor upgrades at work the honest process is: read the migration guide, bump in a branch, let the test suite find the breakage. Move one major version at a time.",
         explanation: `\`\`\`text
 Worth knowing as current, because these are what interviewers probe:
 
@@ -6757,7 +6757,7 @@ Spring Cloud    Ribbon/Hystrix/Zuul gone; Sleuth -> Micrometer Tracing (Boot 3)
       {
         id: 158,
         text: "Describe a situation where you disagreed with a technical decision — how did you handle it?",
-        answer: "What's being assessed is whether you can **disagree on evidence and then commit to the outcome**. The shape is: state the concern once and clearly, with something concrete behind it — a benchmark, a spike, a specific failure mode you can name, not a preference. Then listen to the counter-argument properly, because the other person usually knows a constraint you don't. If the team goes the other way, **commit fully** and help make it work rather than relitigating it in standups. Say what you'd watch for so you'd know early whether the concern was real. And if you turned out to be wrong, say so — that's the strongest version of this answer, not the weakest.",
+        answer: "What's being assessed is whether you can **disagree on evidence and then commit to the outcome**.\n\nThe shape is: state the concern once and clearly, with something concrete behind it — a benchmark, a spike, a specific failure mode you can name, not a preference.\n\nThen listen to the counter-argument properly, because the other person usually knows a constraint you don't. If the team goes the other way, **commit fully** and help make it work rather than relitigating it in standups.\n\nSay what you'd watch for so you'd know early whether the concern was real. And if you turned out to be wrong, say so — that's the strongest version of this answer, not the weakest.",
         explanation: `The situation has to be yours. The pattern below is what makes a real one land, and the failure mode is telling a story where you were right and everyone else eventually admitted it.
 
 \`\`\`text
