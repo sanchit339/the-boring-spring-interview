@@ -4444,7 +4444,7 @@ The controller is now pure business logic — it never sees an unauthenticated r
         followUps: [
           { text: "What is the security filter chain at a high level?" },
           { text: "How does Spring Security run inside a servlet container that knows nothing about Spring beans?" },
-          { text: "What defaults does Spring Security enable out of the box?" },
+          { text: "What do you lose the moment you declare your own `SecurityFilterChain`?" },
         ],
       },
       {
@@ -4475,7 +4475,6 @@ Spring routes the two failures to different components: \`AuthenticationEntryPoi
         followUps: [
           { text: "Where does each happen in a typical request to a secured API?" },
           { text: "What exactly does the `Authentication` object hold after a successful login?" },
-          { text: "Can you be authenticated but not authorized? Give an example." },
         ],
       },
       {
@@ -4550,7 +4549,6 @@ Use **sessions** for a server-rendered app or a first-party web app where instan
 
 The honest middle ground most teams land on: short-lived JWT access tokens plus a **refresh token stored server-side**. Revocation happens at refresh time, so the blast radius of a stolen token is one token lifetime instead of forever. Anyone who tells you JWTs are strictly better than sessions is skipping the revocation conversation.`,
         followUps: [
-          { text: "Why are token-based approaches often preferred for stateless REST APIs?" },
           { text: "How does horizontal scaling differ for sticky sessions vs JWT?" },
           { text: "What is session fixation, and how is it mitigated?" },
         ],
@@ -4599,7 +4597,7 @@ Also secure the actuator explicitly. \`/actuator/health\` is fine to expose, but
         followUps: [
           { text: "How do you permit public endpoints like `/login` and `/actuator/health`?" },
           { text: "What breaks if you add a JWT filter but leave form login and sessions enabled?" },
-          { text: "How do you return 401 JSON instead of redirecting to a login page?" },
+          { text: "Why doesn't `@RestControllerAdvice` catch your 401s?" },
         ],
       },
       {
@@ -4648,7 +4646,7 @@ Swap those \`@Order\` values and the catch-all chain matches \`/api/**\` first �
 Placement inside a chain matters too. \`addFilterBefore(jwt, UsernamePasswordAuthenticationFilter.class)\` puts your filter after the exception-translation and context-persistence filters but **before** authorization runs, which is the only window where setting the \`SecurityContext\` still counts. Put it after \`FilterSecurityInterceptor\` and every request is denied before your filter ever executes. Set \`logging.level.org.springframework.security=DEBUG\` and Boot prints the resolved chain and every filter in order at startup — that's the fastest way to see which chain actually claimed a request when the behaviour doesn't match the config you think you wrote.`,
         followUps: [
           { text: "Why did Spring Security move away from `WebSecurityConfigurerAdapter`?" },
-          { text: "How do you define multiple filter chains for different path patterns?" },
+          { text: "Your JWT filter never runs and API clients get redirected to a login form. Why?" },
           { text: "Where does your custom JWT filter sit in the chain?" },
         ],
       },
@@ -4687,7 +4685,7 @@ Where teams get burned: they read "JWTs don't need CSRF", disable it, then later
         followUps: [
           { text: "Why is CSRF often disabled for pure stateless JWT APIs?" },
           { text: "When would disabling CSRF actually get your app exploited?" },
-          { text: "How does the synchronizer token pattern work?" },
+          { text: "Why is `GET` exempt from CSRF checks?" },
         ],
       },
       {
@@ -4730,7 +4728,7 @@ Two things trip people up. **The \`ROLE_\` prefix is inconsistent**: \`hasRole("
 And method security runs through **Spring AOP proxies**, so it only fires on calls that cross the proxy boundary. A \`@PreAuthorize\` method invoked from another method of the *same* bean is called directly on \`this\` — the annotation is bypassed entirely. Same self-invocation limitation as \`@Transactional\`, same fix: call it from a different bean.`,
         followUps: [
           { text: "What is the difference between roles and authorities in Spring Security?" },
-          { text: "Why does `@PreAuthorize` silently do nothing on a fresh Boot app?" },
+          { text: "`@EnableMethodSecurity` is on and `@PreAuthorize` still isn't firing. Why?" },
           { text: "How do you check that a user owns the specific record they're requesting?" },
         ],
       },
@@ -4770,7 +4768,6 @@ That \`{bcrypt}\` prefix is what makes **\`DelegatingPasswordEncoder\`** the rig
 
 Two production details. Keep the BCrypt strength at **10–12** — higher is safer but each step doubles login CPU cost, and a strength of 15 will melt your login endpoint under load. And return an **identical error message and similar response time** for "unknown user" and "wrong password"; leaking which one failed turns your login form into a tool for enumerating who has an account.`,
         followUps: [
-          { text: "Why should you never store plain-text or reversible encrypted passwords?" },
           { text: "Where does the salt live if the database column only stores one hash string?" },
           { text: "How do you switch hashing algorithms without forcing every user to reset their password?" },
         ],
@@ -4814,7 +4811,7 @@ public String me(@AuthenticationPrincipal Jwt jwt) { return jwt.getSubject(); }
 
 The distinction interviewers push on: **authorization server** issues and signs tokens and owns the login UI; **resource server** owns the data and only ever *validates* tokens. Most teams build resource servers and buy the authorization server. Writing your own is a security project, not a sprint task.`,
         followUps: [
-          { text: "What is the difference between OAuth2 and OpenID Connect?" },
+          { text: "Why couldn't people just use OAuth2 for login?" },
           { text: "Explain authorization code flow at a high level." },
           { text: "What is a resource server vs an authorization server?" },
         ],
