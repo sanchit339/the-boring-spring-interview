@@ -2543,7 +2543,7 @@ public class PaymentService {
       {
         id: 53,
         text: "What is Spring Boot, and how is it different from the Spring Framework?",
-        answer: "Spring Boot is Spring plus **opinionated defaults** — auto-configuration, starter dependencies, and an embedded server — so `java -jar app.jar` is a running application. Spring Framework gives you the raw building blocks (IoC, AOP, MVC) and expects you to assemble them yourself. Boot assembles them for you, and backs off the moment you define your own bean. The concrete difference: a plain Spring MVC app needed a `web.xml`, a `DispatcherServlet` declaration, a view resolver, and an external Tomcat to deploy a WAR into. The Boot equivalent is one starter and a `main` method.",
+        answer: "Spring Boot is Spring plus **opinionated defaults** — auto-configuration, starter dependencies, and an embedded server — so `java -jar app.jar` is a running application.\n\nSpring Framework gives you the raw building blocks (IoC, AOP, MVC) and expects you to assemble them yourself. Boot assembles them for you, and backs off the moment you define your own bean.\n\nThe concrete difference: a plain Spring MVC app needed a `web.xml`, a `DispatcherServlet` declaration, a view resolver, and an external Tomcat to deploy a WAR into. The Boot equivalent is one starter and a `main` method.",
         explanation: `**Analogy:** Spring Framework is like buying a computer in individual pieces — processor, RAM, motherboard, graphics card — requiring you to assemble and configure every driver yourself. Spring Boot is like buying a pre-built MacBook — open the lid, press power, and immediately start working with optimal default settings.
 
 \`\`\`java
@@ -2576,7 +2576,7 @@ public class Application {
       {
         id: 54,
         text: "What are Spring Boot Starters?",
-        answer: "Starters are **dependency bundles** — one coordinate that pulls in a curated, version-aligned set of jars. Add `spring-boot-starter-web` and you get Spring MVC, Jackson, and embedded Tomcat, all tested together at those versions. Bean Validation split into its own starter in Boot 2.3, so `@Valid` needs `spring-boot-starter-validation` on top. The version alignment is the real value: `spring-boot-starter-parent` or the BOM pins everything, so you never write a `<version>` tag for a Spring dependency. Resolve those by hand and you get the classic `NoSuchMethodError` at startup, where the Jackson you pulled in doesn't match the one Spring compiled against.",
+        answer: "Starters are **dependency bundles** — one coordinate that pulls in a curated, version-aligned set of jars. Add `spring-boot-starter-web` and you get Spring MVC, Jackson, and embedded Tomcat, all tested together at those versions.\n\nBean Validation split into its own starter in Boot 2.3, so `@Valid` needs `spring-boot-starter-validation` on top.\n\nThe version alignment is the real value: `spring-boot-starter-parent` or the BOM pins everything, so you never write a `<version>` tag for a Spring dependency. Resolve those by hand and you get the classic `NoSuchMethodError` at startup, where the Jackson you pulled in doesn't match the one Spring compiled against.",
         explanation: `**Analogy:** A Spring Boot Starter is like ordering a combo meal at a fast-food restaurant. Instead of ordering a burger, fries, and drink separately, you order "Combo #1", and the restaurant gives you perfectly paired items in one bundle.
 
 \`\`\`xml
@@ -2610,7 +2610,7 @@ public class Application {
       {
         id: 55,
         text: "What is Auto-Configuration in Spring Boot, and how does it work internally?",
-        answer: "**Auto-configuration** registers beans based on what's on the classpath and what you haven't already defined. Boot reads its candidate list from `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`, then filters each entry through `@Conditional` guards — `@ConditionalOnClass`, `@ConditionalOnMissingBean`, `@ConditionalOnProperty`. See a JDBC driver on the classpath and no `DataSource` bean of your own, and Boot builds one. Define your own `DataSource` and `@ConditionalOnMissingBean` makes Boot step aside silently. When you can't work out where a bean came from, start with `--debug` and read the **condition evaluation report** — it lists every candidate and why it matched or didn't.",
+        answer: "**Auto-configuration** registers beans based on what's on the classpath and what you haven't already defined. Boot reads its candidate list from `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`, then filters each entry through `@Conditional` guards — `@ConditionalOnClass`, `@ConditionalOnMissingBean`, `@ConditionalOnProperty`.\n\nSee a JDBC driver on the classpath and no `DataSource` bean of your own, and Boot builds one. Define your own `DataSource` and `@ConditionalOnMissingBean` makes Boot step aside silently.\n\nWhen you can't work out where a bean came from, start with `--debug` and read the **condition evaluation report** — it lists every candidate and why it matched or didn't.",
         explanation: `\`\`\`java
 // How Spring Boot auto-configures DataSource internally (Simplified Example)
 @Configuration
@@ -2648,7 +2648,7 @@ public class CustomDatabaseConfig {
       {
         id: 56,
         text: "What is `@SpringBootApplication` — what annotations does it combine?",
-        answer: "It's a meta-annotation combining three: **`@SpringBootConfiguration`** (this class declares beans), **`@EnableAutoConfiguration`** (switch on the auto-config machinery), and **`@ComponentScan`** (scan from here down). The \"from here down\" part is what bites. Scanning starts at the package of the annotated class, so a `PaymentService` sitting in a sibling package is never registered, and you get `NoSuchBeanDefinitionException` at startup. Keep the main class in the root package, above everything else. Each piece stays overridable through attributes like `scanBasePackages` and `exclude`.",
+        answer: "It's a meta-annotation combining three: **`@SpringBootConfiguration`** (this class declares beans), **`@EnableAutoConfiguration`** (switch on the auto-config machinery), and **`@ComponentScan`** (scan from here down).\n\nThe \"from here down\" part is what bites. Scanning starts at the package of the annotated class, so a `PaymentService` sitting in a sibling package is never registered, and you get `NoSuchBeanDefinitionException` at startup.\n\nKeep the main class in the root package, above everything else. Each piece stays overridable through attributes like `scanBasePackages` and `exclude`.",
         explanation: `\`\`\`java
 // Close to placing all 3 annotations manually (see the caveat below):
 @SpringBootConfiguration      // Inherits from @Configuration; enables bean definitions
@@ -2683,7 +2683,7 @@ public class NoDbApplication {
       {
         id: 57,
         text: "How do you externalize configuration in Spring Boot (`application.properties` / `application.yml`)?",
-        answer: "You keep configuration **outside the jar**, so one build artifact runs unchanged in every environment. Values arrive from `application.yml`, profile-specific files, environment variables, JVM system properties, and command-line arguments. You read them with **`@Value`** for one-offs or **`@ConfigurationProperties`** for a typed group. Precedence runs most-specific-wins: command-line args beat environment variables, which beat `application-prod.yml`, which beats `application.yml`. That ordering is what lets you point a container at a different database with `SPRING_DATASOURCE_URL` and rebuild nothing.",
+        answer: "You keep configuration **outside the jar**, so one build artifact runs unchanged in every environment. Values arrive from `application.yml`, profile-specific files, environment variables, JVM system properties, and command-line arguments.\n\nYou read them with **`@Value`** for one-offs or **`@ConfigurationProperties`** for a typed group.\n\nPrecedence runs most-specific-wins: command-line args beat environment variables, which beat `application-prod.yml`, which beats `application.yml`. That ordering is what lets you point a container at a different database with `SPRING_DATASOURCE_URL` and rebuild nothing.",
         explanation: `\`\`\`yaml
 # application.yml — Hierarchical, clean format for complex properties
 server:
@@ -2720,7 +2720,7 @@ public class StripePaymentGateway {
       {
         id: 58,
         text: "What is the purpose of `@ConfigurationProperties`?",
-        answer: "`@ConfigurationProperties(prefix = \"payment\")` binds a whole group of properties onto a typed object, so `payment.gateway.timeout` lands in a `Duration` field. Unlike `@Value` it handles **nested objects, lists, maps, and relaxed binding** — `api-key`, `API_KEY`, and `apiKey` all bind to the same field. It also supports **`@Validated`**, so malformed config fails at startup instead of at 3am. The part people miss: the class has to be **registered**, through `@ConfigurationPropertiesScan`, `@EnableConfigurationProperties`, or `@Component`. Miss that and it binds nothing — every field is silently null. In Boot 3 a record or single-constructor class gets **constructor binding** automatically, so the fields can be `final`.",
+        answer: "`@ConfigurationProperties(prefix = \"payment\")` binds a whole group of properties onto a typed object, so `payment.gateway.timeout` lands in a `Duration` field.\n\nUnlike `@Value` it handles **nested objects, lists, maps, and relaxed binding** — `api-key`, `API_KEY`, and `apiKey` all bind to the same field. It also supports **`@Validated`**, so malformed config fails at startup instead of at 3am.\n\nThe part people miss: the class has to be **registered**, through `@ConfigurationPropertiesScan`, `@EnableConfigurationProperties`, or `@Component`. Miss that and it binds nothing — every field is silently null.\n\nIn Boot 3 a record or single-constructor class gets **constructor binding** automatically, so the fields can be `final`.",
         explanation: `\`\`\`yaml
 # application.yml
 app:
@@ -2766,7 +2766,7 @@ public class MailProperties {
       {
         id: 59,
         text: "How do you manage different configurations for different environments (dev, test, prod)?",
-        answer: "You use **profile-specific files** — `application-dev.yml`, `application-prod.yml` — layered over a shared `application.yml`, or one multi-document YAML split by `---`. Activate with `spring.profiles.active=prod`, normally from an environment variable in the container rather than baked into the image. The active profile's values override the shared ones, so `application.yml` carries defaults and each profile overrides only what differs. Keep real secrets out of all of them — those come from the environment or a secret manager, never a file inside the jar.",
+        answer: "You use **profile-specific files** — `application-dev.yml`, `application-prod.yml` — layered over a shared `application.yml`, or one multi-document YAML split by `---`. Activate with `spring.profiles.active=prod`, normally from an environment variable in the container rather than baked into the image.\n\nThe active profile's values override the shared ones, so `application.yml` carries defaults and each profile overrides only what differs.\n\nKeep real secrets out of all of them — those come from the environment or a secret manager, never a file inside the jar.",
         explanation: `\`\`\`yaml
 # application.yml (Default baseline properties)
 spring:
@@ -2810,7 +2810,7 @@ java -jar order-service.jar --spring.profiles.active=prod
       {
         id: 60,
         text: "What is Spring Boot DevTools?",
-        answer: "**DevTools** is a development-only module: automatic restart when classes recompile, LiveReload in the browser, and development-friendly defaults like template caching switched off. The restart works through two classloaders — your project code in a restart loader, third-party jars in a base loader that's left untouched. Only the restart loader gets discarded, so a reload takes a second or two rather than a full JVM boot. It disables itself when launched from a packaged jar, so it can't reach production. Keep it in `optional`/`developmentOnly` scope so it doesn't leak into anything that depends on your module.",
+        answer: "**DevTools** is a development-only module: automatic restart when classes recompile, LiveReload in the browser, and development-friendly defaults like template caching switched off.\n\nThe restart works through two classloaders — your project code in a restart loader, third-party jars in a base loader that's left untouched. Only the restart loader gets discarded, so a reload takes a second or two rather than a full JVM boot.\n\nIt disables itself when launched from a packaged jar, so it can't reach production. Keep it in `optional`/`developmentOnly` scope so it doesn't leak into anything that depends on your module.",
         explanation: `\`\`\`xml
 <!-- Add DevTools to your pom.xml as an optional dependency -->
 <dependency>
@@ -2837,7 +2837,7 @@ logging.level.web=DEBUG
       {
         id: 61,
         text: "What is Spring Boot Actuator, and what are some commonly used endpoints?",
-        answer: "**Actuator** exposes production monitoring over HTTP or JMX: **`/actuator/health`** for liveness and readiness, **`/actuator/metrics`** for JVM and HTTP stats via Micrometer, **`/actuator/env`** for resolved configuration, and **`/actuator/loggers`** to read and change log levels at runtime without a redeploy. By default **only `/health` is exposed over HTTP** — `/info` was dropped from the defaults in Boot 2.6, and anything else has to be added to `management.endpoints.web.exposure.include` by hand. Never open `/actuator/**` wholesale. `/actuator/env` prints configuration including credentials, and `/actuator/heapdump` hands over a file containing live memory — so keep it behind `hasRole(\"ADMIN\")` or on a separate `management.server.port` reachable only inside the cluster.",
+        answer: "**Actuator** exposes production monitoring over HTTP or JMX: **`/actuator/health`** for liveness and readiness, **`/actuator/metrics`** for JVM and HTTP stats via Micrometer, **`/actuator/env`** for resolved configuration, and **`/actuator/loggers`** to read and change log levels at runtime without a redeploy.\n\nBy default **only `/health` is exposed over HTTP** — `/info` was dropped from the defaults in Boot 2.6, and anything else has to be added to `management.endpoints.web.exposure.include` by hand.\n\nNever open `/actuator/**` wholesale. `/actuator/env` prints configuration including credentials, and `/actuator/heapdump` hands over a file containing live memory — so keep it behind `hasRole(\"ADMIN\")` or on a separate `management.server.port` reachable only inside the cluster.",
         explanation: `\`\`\`yaml
 # application.yml — Secure Actuator endpoint exposure in production
 management:
@@ -2877,7 +2877,7 @@ public class SecurityConfig {
       {
         id: 62,
         text: "How do you create a custom Actuator health indicator?",
-        answer: "Implement **`HealthIndicator`** and register it as a bean — the bean name becomes the key in the response, so `paymentGatewayHealthIndicator` appears as `paymentGateway`. Inside `health()` you run the check and return `Health.up()`, or `Health.down().withDetail(\"error\", ex.getMessage())` to attach diagnostics. Boot aggregates every indicator into `/actuator/health`, and **a single `DOWN` drags the whole endpoint to `DOWN`** with HTTP 503. That's the danger worth saying out loud: put a slow third-party ping in there and you've wired someone else's outage to your Kubernetes liveness probe. Give the check a timeout, and put it in the **readiness** group rather than liveness.",
+        answer: "Implement **`HealthIndicator`** and register it as a bean — the bean name becomes the key in the response, so `paymentGatewayHealthIndicator` appears as `paymentGateway`. Inside `health()` you run the check and return `Health.up()`, or `Health.down().withDetail(\"error\", ex.getMessage())` to attach diagnostics.\n\nBoot aggregates every indicator into `/actuator/health`, and **a single `DOWN` drags the whole endpoint to `DOWN`** with HTTP 503.\n\nThat's the danger worth saying out loud: put a slow third-party ping in there and you've wired someone else's outage to your Kubernetes liveness probe. Give the check a timeout, and put it in the **readiness** group rather than liveness.",
         explanation: `\`\`\`java
 // Custom HealthIndicator checking third-party Payment API availability
 @Component
@@ -2921,7 +2921,7 @@ public class PaymentGatewayHealthIndicator implements HealthIndicator {
       {
         id: 63,
         text: "What embedded servers does Spring Boot support?",
-        answer: "Spring Boot supports three embedded Servlet containers: **Apache Tomcat** (the default for `spring-boot-starter-web`), **Eclipse Jetty**, and **Red Hat Undertow**, alongside **Netty** for reactive applications (`spring-boot-starter-webflux`). You switch embedded servers by excluding Tomcat from `spring-boot-starter-web` and adding your preferred server starter (like `spring-boot-starter-undertow`) in Maven or Gradle. Embedded servers eliminate the need to install and configure standalone Tomcat application servers on host servers. Leaving two server starters on the classpath doesn't fail — the auto-configuration is ordered Tomcat, Jetty, Undertow, each guarded by `@ConditionalOnMissingBean`, so **Tomcat silently wins**. That's the actual bug: you add Undertow, tune its properties, and nothing changes because you never excluded Tomcat.",
+        answer: "Spring Boot supports three embedded Servlet containers: **Apache Tomcat** (the default for `spring-boot-starter-web`), **Eclipse Jetty**, and **Red Hat Undertow**, alongside **Netty** for reactive applications (`spring-boot-starter-webflux`).\n\nYou switch embedded servers by excluding Tomcat from `spring-boot-starter-web` and adding your preferred server starter (like `spring-boot-starter-undertow`) in Maven or Gradle. Embedded servers eliminate the need to install and configure standalone Tomcat application servers on host servers.\n\nLeaving two server starters on the classpath doesn't fail — the auto-configuration is ordered Tomcat, Jetty, Undertow, each guarded by `@ConditionalOnMissingBean`, so **Tomcat silently wins**. That's the actual bug: you add Undertow, tune its properties, and nothing changes because you never excluded Tomcat.",
         explanation: `\`\`\`xml
 <!-- Switching from default Tomcat to Undertow in Maven -->
 <dependency>
@@ -2952,7 +2952,7 @@ public class PaymentGatewayHealthIndicator implements HealthIndicator {
       {
         id: 64,
         text: "How do you change the default embedded server or port in Spring Boot?",
-        answer: "Set **`server.port`** in `application.yml`, or override it per environment with the `SERVER_PORT` environment variable or `--server.port=9090` on the command line. Setting `server.port=0` binds a **random free port** — that's what `@SpringBootTest(webEnvironment = RANDOM_PORT)` uses so parallel test runs don't collide. If the port is already taken, startup fails with `PortInUseException`. To change the server itself rather than the port, **exclude `spring-boot-starter-tomcat`** from `spring-boot-starter-web` and add the Jetty or Undertow starter. The exclusion is the step people skip.",
+        answer: "Set **`server.port`** in `application.yml`, or override it per environment with the `SERVER_PORT` environment variable or `--server.port=9090` on the command line.\n\nSetting `server.port=0` binds a **random free port** — that's what `@SpringBootTest(webEnvironment = RANDOM_PORT)` uses so parallel test runs don't collide. If the port is already taken, startup fails with `PortInUseException`.\n\nTo change the server itself rather than the port, **exclude `spring-boot-starter-tomcat`** from `spring-boot-starter-web` and add the Jetty or Undertow starter. The exclusion is the step people skip.",
         explanation: `\`\`\`yaml
 # application.yml — Setting custom port and context path
 server:
@@ -2986,7 +2986,7 @@ To enable HTTPS, add \`server.ssl.key-store=classpath:keystore.p12\` and \`serve
       {
         id: 65,
         text: "How does Spring Boot handle logging, and how do you configure log levels?",
-        answer: "Boot logs through **SLF4J** with **Logback** bound by default and already configured, so you get sensible console output without adding anything. Set levels per package in properties — `logging.level.com.acme.order=DEBUG`, or `logging.level.org.hibernate.SQL=DEBUG` to watch the generated SQL. For anything structural (JSON output for ELK, rolling files, per-profile appenders) add a `logback-spring.xml`, which Boot processes itself so `<springProfile>` blocks work. The default level is `INFO`. During an incident you can flip a level at runtime through `/actuator/loggers` with no redeploy, which is the trick worth remembering.",
+        answer: "Boot logs through **SLF4J** with **Logback** bound by default and already configured, so you get sensible console output without adding anything.\n\nSet levels per package in properties — `logging.level.com.acme.order=DEBUG`, or `logging.level.org.hibernate.SQL=DEBUG` to watch the generated SQL.\n\nFor anything structural (JSON output for ELK, rolling files, per-profile appenders) add a `logback-spring.xml`, which Boot processes itself so `<springProfile>` blocks work.\n\nThe default level is `INFO`. During an incident you can flip a level at runtime through `/actuator/loggers` with no redeploy, which is the trick worth remembering.",
         explanation: `\`\`\`yaml
 # application.yml — Declarative log level configuration
 logging:
@@ -3020,7 +3020,7 @@ public class OrderService {
       {
         id: 66,
         text: "What is the difference between `CommandLineRunner` and `ApplicationRunner`?",
-        answer: "Both run **after the context is refreshed but before `SpringApplication.run()` returns** — the slot for startup work like seeding reference data or warming a cache. The only real difference is the argument shape. `CommandLineRunner` hands you the raw `String... args`. `ApplicationRunner` hands you `ApplicationArguments`, which has already split `--env=prod` into option names and values, so you call `args.getOptionValues(\"env\")` instead of parsing strings yourself. Sequence several with `@Order`. If a runner throws, the application **fails to start** — usually exactly what you want for a required migration.",
+        answer: "Both run **after the context is refreshed but before `SpringApplication.run()` returns** — the slot for startup work like seeding reference data or warming a cache.\n\nThe only real difference is the argument shape. `CommandLineRunner` hands you the raw `String... args`. `ApplicationRunner` hands you `ApplicationArguments`, which has already split `--env=prod` into option names and values, so you call `args.getOptionValues(\"env\")` instead of parsing strings yourself.\n\nSequence several with `@Order`. If a runner throws, the application **fails to start** — usually exactly what you want for a required migration.",
         explanation: `\`\`\`java
 // CommandLineRunner — Receives raw string array
 @Component
@@ -3060,7 +3060,7 @@ public class CacheWarmupRunner implements ApplicationRunner {
       {
         id: 67,
         text: "How do you package a Spring Boot application (JAR vs WAR)?",
-        answer: "The default is an **executable fat JAR** — your classes, every dependency, and an embedded Tomcat, launched with `java -jar app.jar`. A **WAR** targets an external servlet container: set packaging to `war`, mark the embedded server `provided`, and extend **`SpringBootServletInitializer`** so the container can bootstrap the app. Fat JAR wins in modern deployments because it's a single artifact with no server to install or patch separately. For containers, build a **layered** image with `layertools` or a Buildpack so dependencies cache in their own layer. A code-only rebuild then ships a few hundred KB instead of the whole 200MB.",
+        answer: "The default is an **executable fat JAR** — your classes, every dependency, and an embedded Tomcat, launched with `java -jar app.jar`.\n\nA **WAR** targets an external servlet container: set packaging to `war`, mark the embedded server `provided`, and extend **`SpringBootServletInitializer`** so the container can bootstrap the app.\n\nFat JAR wins in modern deployments because it's a single artifact with no server to install or patch separately.\n\nFor containers, build a **layered** image with `layertools` or a Buildpack so dependencies cache in their own layer. A code-only rebuild then ships a few hundred KB instead of the whole 200MB.",
         explanation: `\`\`\`java
 // Packaging as a WAR requires extending SpringBootServletInitializer
 @SpringBootApplication
@@ -3094,7 +3094,7 @@ Spring Boot uses a custom \`JarLauncher\` that allows nesting JAR dependencies i
       {
         id: 68,
         text: "What is the difference between `@RestController` and `@Controller`?",
-        answer: "`@Controller` returns **view names** — the returned string is resolved to a Thymeleaf or JSP template and rendered server-side. `@RestController` is `@Controller` + `@ResponseBody`, so the return value goes through an `HttpMessageConverter` and is serialized straight into the response body as JSON. Use `@RestController` for APIs, `@Controller` for server-rendered pages. The mistake you make once: leave `@Controller` on a REST class returning a `UserDto`, and Spring tries to resolve a **view** instead of serializing it. You get a template-not-found error rather than your JSON.",
+        answer: "`@Controller` returns **view names** — the returned string is resolved to a Thymeleaf or JSP template and rendered server-side. `@RestController` is `@Controller` + `@ResponseBody`, so the return value goes through an `HttpMessageConverter` and is serialized straight into the response body as JSON.\n\nUse `@RestController` for APIs, `@Controller` for server-rendered pages.\n\nThe mistake you make once: leave `@Controller` on a REST class returning a `UserDto`, and Spring tries to resolve a **view** instead of serializing it. You get a template-not-found error rather than your JSON.",
         explanation: `\`\`\`java
 // Traditional MVC Controller — Returns HTML view template name
 @Controller
