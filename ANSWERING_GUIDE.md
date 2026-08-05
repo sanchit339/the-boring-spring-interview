@@ -188,7 +188,7 @@ is correct as-is.
 
 ## 6. Current coverage
 
-158 questions, 410 followups, **410 answered / 0 missing** — all 12 categories complete.
+158 questions, 407 followups, **407 answered / 0 missing** — all 12 categories complete.
 
 Followup count is **at most 3, not exactly 3**. Prune rather than pad — see
 `answer_rules.md` Rule 7. Ten `core-java`, three `oop` and nine `spring-core`
@@ -200,6 +200,16 @@ most complete: the richer the answer, the less room a third followup has.
 `spring-mvc-rest` was 45/45 — three per question across all fifteen — and 14 of
 those restated their parent, some almost word for word. The uniform count is
 itself the signal; check it before reading a single answer.
+
+**All twelve categories have now had the sweep** — paragraph-shaped answers
+and a followup prune — so a new category or question should be written that way
+rather than fixed afterwards. Totals went 439 -> 407.
+
+**`behavioral` is the deliberate exception to the reword pattern.** Its
+followups are what an interviewer literally says next ("what was your specific
+contribution vs the team's?"), so they're rehearsal prompts. Rewriting those as
+failure-mode questions turns a prompt into a study note and makes the category
+worse. Prune restatement there, but leave the interviewer's voice alone.
 
 **Restating the parent doesn't always mean delete.** `spring-data-jpa` had the
 same 3-per-question shape, but its followup *answers* were strong — it was the
@@ -221,8 +231,8 @@ when something is.
 | `microservices` | Q113–Q124 | 12 | 12/12 | 12/12 | 33/33 |
 | `testing` | Q125–Q132 | 8 | 8/8 | 8/8 | 23/23 |
 | `build-git` | Q133–Q142 | 10 | 10/10 | 10/10 | 27/27 |
-| `system-design` | Q143–Q152 | 10 | 10/10 | 10/10 | 30/30 |
-| `behavioral` | Q153–Q158 | 6 | 6/6 | 6/6 | 18/18 |
+| `system-design` | Q143–Q152 | 10 | 10/10 | 10/10 | 28/28 |
+| `behavioral` | Q153–Q158 | 6 | 6/6 | 6/6 | 17/17 |
 
 **Worked example of the §3.1 key-drift bug (now fixed).** Six `core-java`
 followups on Q17/Q18 rendered blank even though their answers existed in
