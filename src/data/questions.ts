@@ -3155,7 +3155,6 @@ DispatcherServlet
 
 **Where it shows up:** when a request returns the wrong status or content type, 90% of the time the fix lives in this chain — a missing converter, a filter ordering issue, or an interceptor short-circuiting the response. Knowing the order tells you *where* to put a breakpoint.`,
         followUps: [
-          { text: "What is the Front Controller pattern, and how does DispatcherServlet implement it?" },
           { text: "What roles do HandlerAdapter, ViewResolver, and interceptors play?" },
           { text: "Where does filter chain sit relative to DispatcherServlet?" },
         ],
@@ -3189,7 +3188,6 @@ public class UserController {
 
 \`@GetMapping\` is literally \`@RequestMapping(method = GET)\` under the hood — it's pure sugar, but the sugar is what stops you from exposing unintended verbs. In a code review, a bare \`@RequestMapping("/x")\` on a method is an automatic flag.`,
         followUps: [
-          { text: "Can you put `@RequestMapping` on a class for a base path?" },
           { text: "How do you map multiple paths or HTTP methods on one method?" },
           { text: "How do `consumes` and `produces` attributes work?" },
         ],
@@ -3248,7 +3246,6 @@ public class OrderController {
 Both conversions run through an **\`HttpMessageConverter\`** — \`MappingJackson2HttpMessageConverter\` for JSON. The classic mistake is using plain \`@Controller\` for a JSON endpoint and forgetting \`@ResponseBody\`: Spring then treats the returned String as a **view name** and 404s looking for a template. \`@RestController\` exists so you can't make that error.`,
         followUps: [
           { text: "Which `HttpMessageConverter` handles JSON by default?" },
-          { text: "How does `@RestController` relate to `@ResponseBody`?" },
           { text: "What happens if deserialization fails for the request body?" },
         ],
       },
@@ -3283,7 +3280,7 @@ public class OrderController {
 
 **Production note:** catch \`MethodArgumentNotValidException\` in a \`@RestControllerAdvice\` and return a **structured 400** with field-level errors — Spring's default gives a bare "Bad Request" that tells the client nothing about *which* field failed.`,
         followUps: [
-          { text: "What is the difference between `@Valid` and `@Validated`?" },
+          { text: "You put `@Min(1)` on a `@RequestParam` and it's ignored. Why?" },
           { text: "Where do you put constraint annotations — DTO fields or custom validators?" },
           { text: "How do you return a structured 400 response for validation errors?" },
         ],
@@ -3308,34 +3305,38 @@ public ResponseEntity<?> create(@RequestBody User u) {   // note the wildcard re
 \`\`\`
 
 \`\`\`java
-// GOOD — one @RestControllerAdvice handles it app-wide
+// GOOD — one @RestControllerAdvice handles it app-wide, returning RFC 7807 ProblemDetail
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<ErrorResponse> notFound(UserNotFoundException ex) {
-        return ResponseEntity.status(404)
-            .body(new ErrorResponse("USER_NOT_FOUND", ex.getMessage()));
+    public ProblemDetail notFound(UserNotFoundException ex) {
+        // Spring 6 builds the {type, title, status, detail} body for you
+        ProblemDetail pd = ProblemDetail.forStatusAndDetail(NOT_FOUND, ex.getMessage());
+        pd.setTitle("User not found");
+        pd.setProperty("userId", ex.getUserId()); // anything extra goes in as a property
+        return pd;
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> validation(MethodArgumentNotValidException ex) {
-        return ResponseEntity.status(400).body(...); // structured field errors
+    public ProblemDetail validation(MethodArgumentNotValidException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(BAD_REQUEST);
+        pd.setProperty("errors", fieldErrorsOf(ex)); // structured field errors
+        return pd;
     }
 }
 \`\`\`
 
-This is how production APIs keep error responses **uniform** — every endpoint returns the same \`{code, message, ...}\` shape instead of each controller inventing its own. It also keeps controllers free of try/catch noise.`,
+This is how production APIs keep error responses **uniform** — every endpoint returns the same shape instead of each controller inventing its own, and it keeps controllers free of try/catch noise. Returning \`ProblemDetail\` also sets the content type to \`application/problem+json\`, which tells a client the body follows RFC 7807 rather than your house format.`,
         followUps: [
-          { text: "What is the difference between `@ControllerAdvice` and `@RestControllerAdvice`?" },
           { text: "How do you map domain exceptions to HTTP status codes?" },
-          { text: "Should you expose stack traces to clients in production? Why not?" },
+          { text: "How much of an exception should the client see?" },
         ],
       },
       {
         id: 75,
         text: "What HTTP status codes are commonly used, and how do you return custom status codes from a controller?",
-        answer: "The core set: **200 OK** (success), **201 Created** (new resource, with a `Location` header), **204 No Content** (success, empty body), **400 Bad Request** (client sent garbage/validation failure), **401 Unauthorized** (not logged in), **403 Forbidden** (logged in but no permission), **404 Not Found**, **409 Conflict** (duplicate), **500 Internal Server Error** (your bug).\n\nYou return a custom status two ways: **`ResponseEntity.status(code).body(obj)`** for dynamic runtime control, or **`@ResponseStatus(code)`** for a fixed status on a method or exception class.",
+        answer: "The core set:\n\n- **200 OK** — success\n- **201 Created** — a new resource, with a `Location` header pointing at it\n- **204 No Content** — success, empty body\n- **400 Bad Request** — the client sent garbage, or validation failed\n- **401 Unauthorized** — not logged in\n- **403 Forbidden** — logged in, but not allowed\n- **404 Not Found**\n- **409 Conflict** — duplicate, or a clash with current state\n- **500 Internal Server Error** — your bug\n\nYou return a custom status two ways: **`ResponseEntity.status(code).body(obj)`** for dynamic runtime control, or **`@ResponseStatus(code)`** for a fixed status on a method or exception class.",
         explanation: `\`\`\`java
 // ResponseEntity — status decided at RUNTIME, can vary per branch
 @PostMapping("/users")
@@ -3353,9 +3354,8 @@ public class UserNotFoundException extends RuntimeException { ... }
 
 **Two traps:** (1) returning **200 for a create** is wrong — it should be **201** with a \`Location\` header so the client knows where the new resource lives. (2) **401 vs 403** are misnamed: 401 really means *unauthenticated* ("who are you?"), 403 means *authenticated but not allowed* ("I know you, and no"). Getting these backwards breaks client re-login flows.`,
         followUps: [
-          { text: "When would you return 201 Created vs 200 OK?" },
           { text: "What is the difference between 401 and 403?" },
-          { text: "How do you return a status with `ResponseEntity` vs `@ResponseStatus`?" },
+          { text: "A request is well-formed but breaks a business rule — 400, 409 or 422?" },
         ],
       },
       {
@@ -3387,7 +3387,6 @@ public ResponseEntity<User> create(@RequestBody @Valid CreateUserRequest req) {
 The builder API (\`ResponseEntity.status(409).header(...).body(...)\`, plus shortcuts \`.ok\`, \`.created\`, \`.noContent().build()\`) reads top-down and lets you omit any leg you don't need. Use it when status/headers/conditional behavior matter; use a bare DTO return when they don't.`,
         followUps: [
           { text: "How do you set custom headers with ResponseEntity?" },
-          { text: "When is returning a DTO directly (with `@RestController`) enough?" },
           { text: "How do you return a file download with `ResponseEntity`?" },
         ],
       },
@@ -3412,9 +3411,8 @@ public class UserV2Controller { ... } // breaking change lives here, v1 keeps wo
 public UserV2 getUserV2() { ... }
 \`\`\`
 
-**Deprecation matters more than the strategy:** when you ship v2, keep v1 alive, add a **\`Deprecation\`** and **\`Sunset\`** header to its responses, document a migration path with a real shutdown date, and monitor traffic — only retire v1 once usage is near zero. Never hard-cut a public version; clients you don't control will break. Most teams default to URI versioning because its discoverability and caching outweigh the URL clutter.`,
+**Deprecation matters more than the strategy:** shipping v2 is the easy half. Retiring v1 without breaking clients you don't control is the part measured in months, and it's what the strategy has to support. Most teams default to URI versioning because its discoverability and caching outweigh the URL clutter.`,
         followUps: [
-          { text: "Compare URI versioning (`/v1/users`) vs header versioning." },
           { text: "How do you deprecate an old API version safely?" },
           { text: "What are trade-offs of query-param versioning?" },
         ],
@@ -3441,9 +3439,7 @@ public UserV2 getUserV2() { ... }
 
 In Spring you build these with **Spring HATEOAS** (\`EntityModel\`, \`WebMvcLinkBuilder\`): \`linkTo(methodOn(OrderController.class).cancel(id)).withRel("cancel")\`. It's worth the complexity for **public, discoverable APIs** where you want to evolve URLs without breaking clients. For internal microservices where one team owns both sides, hand-coded links (or none) are simpler — the boilerplate rarely pays off.`,
         followUps: [
-          { text: "What does \"hypermedia as the engine of application state\" mean in practice?" },
           { text: "When is HATEOAS worth the extra complexity?" },
-          { text: "How do links in responses help API discoverability?" },
         ],
       },
       {
@@ -3475,7 +3471,6 @@ public class CorsConfig implements WebMvcConfigurer {
 **The trap that bites in prod:** with Spring Security on the classpath, the MVC config above is **ignored** — you must wire a \`CorsConfigurationSource\` bean and call \`http.cors(Customizer.withDefaults())\` inside \`SecurityFilterChain\`. Forgetting this is the #1 cause of "CORS works locally, breaks deployed." Also remember browsers send an **OPTIONS preflight** before non-simple requests, so your CORS config must allow OPTIONS, not just the real verb.`,
         followUps: [
           { text: "What is a preflight request, and which HTTP method is used?" },
-          { text: "How do `@CrossOrigin`, global CORS config, and Security CORS differ?" },
           { text: "Which headers actually drive the browser's CORS decision?" },
         ],
       },
@@ -3496,7 +3491,6 @@ public User getUser(@PathVariable Long id) {
 
 \`consumes\` does the mirror for the **request** — \`@PostMapping(consumes = "application/json")\` rejects a non-JSON body with **415 Unsupported Media Type**. Historically Spring also supported path-extension (\`/users.json\`) and query-param (\`?format=xml\`) negotiation, but **path-extension is deprecated** for security (RFD attacks) and off by default. The modern, safe approach is **\`Accept\` header only**.`,
         followUps: [
-          { text: "How does the `Accept` header influence response format?" },
           { text: "How can path extensions or query params participate in negotiation?" },
           { text: "How do you support both JSON and XML for the same endpoint?" },
         ],
@@ -3531,7 +3525,6 @@ public User getUser(
 **Naming note:** Swagger was the original spec (2.0); it was donated to the Linux Foundation and renamed **OpenAPI**, with OpenAPI 3 as the successor. "Swagger UI" survives as the viewer, but the spec you author today is OpenAPI 3. The older **springfox** library is unmaintained and doesn't support Spring Boot 3 — use **springdoc**. In production, lock down or remove the UI so you don't hand attackers a map of every endpoint.`,
         followUps: [
           { text: "What is the difference between Swagger and OpenAPI 3?" },
-          { text: "How do you integrate springdoc-openapi with Spring Boot?" },
           { text: "How do you document auth (Bearer JWT) in OpenAPI?" },
         ],
       },
@@ -3562,7 +3555,6 @@ public User patch(@PathVariable Long id, @RequestBody Map<String, Object> change
 **Two traps:** (1) If you implement PUT as a *partial* update you break its idempotency contract and confuse clients — pick one semantics per endpoint and stick to it. (2) POST isn't *forced* to be non-idempotent: with an **idempotency key** header (Stripe's pattern), a retried POST returns the cached result instead of creating a duplicate, which is how you make payment endpoints safe to retry.`,
         followUps: [
           { text: "Which methods are idempotent, and why does that matter?" },
-          { text: "When would you use PUT for full replace vs PATCH for partial update?" },
           { text: "Is POST always non-idempotent? What about create-with-client-id patterns?" },
         ],
       },
@@ -3586,8 +3578,7 @@ public Page<Order> list(@PageableDefault(size = 20, sort = "createdAt") Pageable
 
 \`Page<T>\` serializes to \`{ content: [...], totalElements: 105, totalPages: 6, number: 0, size: 20 }\`. The \`@PageableDefault\` caps the defaults, but you should also **clamp the max size** so a malicious or buggy \`?size=999999\` is rejected — Spring Boot lets you set \`spring.data.web.pageable.max-page-size\`. For large exports that clients paginate through, pair this with a streaming or cursor-based endpoint rather than deep \`page=5000\` offsets, which get slow on most DBs.`,
         followUps: [
-          { text: "How does Spring Data's `Pageable` integrate with controllers?" },
-          { text: "What should a paginated response body include?" },
+          { text: "Why does `?page=5000` get slow, and what do you use instead?" },
           { text: "How do you prevent expensive unbounded list endpoints?" },
         ],
       },
