@@ -3626,7 +3626,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 **Production context:** In a real service you get 80% of your DB access needs from the interface alone. The generated proxy delegates to \`SimpleJpaRepository\`, which wraps \`EntityManager\` internally. You still drop to \`@Query\` or \`EntityManager\` for complex joins or bulk operations — Spring Data doesn't replace SQL, it eliminates the scaffolding around it.`,
         followUps: [
-          { text: "What boilerplate does it remove compared to plain JPA EntityManager code?" },
           { text: "How do repository interfaces get implemented at runtime?" },
           { text: "What is the difference between Spring Data JPA and JDBC Template?" },
         ],
@@ -3658,7 +3657,6 @@ A real example: you call \`userRepository.findByEmail(email)\`. **Spring Data JP
         followUps: [
           { text: "Is Hibernate a JPA implementation or a separate API?" },
           { text: "Can you use Hibernate features that are not in the JPA standard?" },
-          { text: "Where does Spring Data JPA sit in this stack?" },
         ],
       },
       {
@@ -3701,8 +3699,7 @@ users.stream()...  // works
 
 **The production warning:** \`JpaRepository\` exposes \`deleteAll()\` and \`deleteAllInBatch()\` as public methods. Those wipe the entire table. Never expose them through a service interface without an explicit admin guard. Restrict at the service layer — don't count on callers being careful.`,
         followUps: [
-          { text: "Which methods does each interface add?" },
-          { text: "Why is `JpaRepository` the most common choice?" },
+          { text: "What is the difference between `findById` and `getReferenceById`?" },
           { text: "Should you expose delete-all methods on production repositories?" },
         ],
       },
@@ -3738,7 +3735,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         followUps: [
           { text: "What is the difference between JPQL and native SQL in `@Query`?" },
           { text: "How do you use named parameters vs positional parameters?" },
-          { text: "How do you run modifying queries (`@Modifying`) with `@Transactional`?" },
+          { text: "What do you have to get right when running a bulk `@Modifying` update?" },
         ],
       },
       {
@@ -3774,7 +3771,7 @@ List<Order> findComplexOrders(...);
 
 **Key advantage of derived methods:** errors are caught at **startup**, not at runtime. If you typo \`findByEmial\`, Spring fails to start with \`PropertyReferenceException: No property 'emial' found\`. That's a free compile-time-equivalent check.`,
         followUps: [
-          { text: "When do derived methods become too complex or ambiguous?" },
+          { text: "When does a derived method name become ambiguous?" },
           { text: "How does Spring parse method names like `findByEmailAndStatus`?" },
           { text: "Can derived queries support pagination and sorting?" },
         ],
@@ -3819,7 +3816,7 @@ For a **read-only endpoint** none of these are ideal — if you only need an ord
 **Detection:** enable \`spring.jpa.show-sql=true\` and count the \`SELECT\` statements in logs. In tests, use Hypersistence Optimizer or assert query count with p6spy. Never discover N+1 in production — it's a perf cliff, not a gradual degradation.`,
         followUps: [
           { text: "How would you detect N+1 in logs or with a tool?" },
-          { text: "How do `JOIN FETCH`, `@EntityGraph`, and batch fetching help?" },
+          { text: "`JOIN FETCH`, `@EntityGraph`, `@BatchSize` — when does each one break?" },
           { text: "When is DTO projection a better fix than eager fetching?" },
         ],
       },
@@ -3860,7 +3857,7 @@ Optional<Order> findWithUser(@Param("id") Long id);
 
 **LazyInitializationException:** the price of LAZY is that you get a proxy. Access \`order.getUser().getName()\` outside an open session (after the \`@Transactional\` method returns) and Hibernate throws \`LazyInitializationException\` — the session is closed, it can't issue the SELECT. Solution: load what you need inside the transaction.`,
         followUps: [
-          { text: "What is the default fetch type for `@ManyToOne` vs `@OneToMany`?" },
+          { text: "Why is EAGER the harder default to live with?" },
           { text: "What is `LazyInitializationException`, and when does it occur?" },
           { text: "How do Open Session In View (OSIV) settings affect lazy loading?" },
         ],
@@ -3911,7 +3908,7 @@ order.getItems().add(item); // inverse side — in-memory consistency
 
 **Many-to-many with extra columns:** standard \`@ManyToMany\` can't hold extra columns on the join table. Create an explicit entity (\`StudentCourse\` with \`enrolledAt\`, \`grade\`) with \`@ManyToOne\` to each side instead.`,
         followUps: [
-          { text: "What is owning side vs inverse side, and why does `mappedBy` matter?" },
+          { text: "How do you keep both sides of a bidirectional relationship in sync?" },
           { text: "How do you model a many-to-many that needs extra columns on the join?" },
           { text: "What cascade types are commonly used, and when is `CascadeType.ALL` dangerous?" },
         ],
@@ -3950,7 +3947,7 @@ public class Product { ... }
 
 **The staleness trap:** L2 cache with \`READ_WRITE\` strategy handles concurrent updates safely via versioning. But if you bypass Hibernate (bulk SQL update, Flyway script, external service writes), the L2 cache is **never invalidated** and serves stale data until TTL expires. The query cache has the same issue — a table write invalidates all cached queries for that entity type, which can be worse than no cache at all on write-heavy tables.`,
         followUps: [
-          { text: "Is the first-level cache enabled by default? What is its scope?" },
+          { text: "A batch job loads 100,000 rows in one transaction and runs out of memory. Why?" },
           { text: "How do you enable and configure the second-level cache?" },
           { text: "What is query cache, and when is it useful?" },
         ],
@@ -3993,9 +3990,8 @@ public void auditAndQuery() {
 
 **In tests:** \`saveAndFlush()\` is the right call when you want to verify the DB state immediately (e.g., test that a \`@Column(unique = true)\` constraint fires). Without flush, the INSERT may not have hit the DB when your assertion runs.`,
         followUps: [
-          { text: "Is Spring Data's `save()` always an insert or can it update?" },
+          { text: "Why would `save()` fire a SELECT before it inserts?" },
           { text: "When do you need `flush` before a subsequent query in the same transaction?" },
-          { text: "How does `merge()` differ from `persist()` for detached entities?" },
         ],
       },
       {
@@ -4049,8 +4045,8 @@ public void reserveSeat(Long seatId) {
 **Catch 409, not 500:** When optimistic lock fails, return HTTP 409 Conflict with a \"please refresh and retry\" message. Letting it surface as a 500 makes it look like a server bug when it's actually a concurrency signal.`,
         followUps: [
           { text: "How does `@Version` implement optimistic locking?" },
-          { text: "What exception is thrown on optimistic lock failure?" },
-          { text: "When would you choose pessimistic locking over optimistic?" },
+          { text: "How should the API respond when an optimistic lock fails?" },
+          { text: "What does a pessimistic lock cost you in production?" },
         ],
       },
       {
@@ -4096,8 +4092,8 @@ public class OrderService {
 **Rollback defaults:** Spring rolls back on \`RuntimeException\` (unchecked) and commits on checked exceptions. So a \`SQLException\` (checked) by default does NOT roll back. Always specify \`rollbackFor = Exception.class\` or use unchecked exceptions for domain failures.`,
         followUps: [
           { text: "What is the default rollback policy for runtime vs checked exceptions?" },
-          { text: "Does `@Transactional` work on private methods or self-invocation? Why?" },
-          { text: "Where should transactional boundaries live — controller, service, or repository?" },
+          { text: "A `@Transactional` method called from the same class starts no transaction. How do you fix it?" },
+          { text: "Repositories are already transactional — so why put `@Transactional` on the service?" },
         ],
       },
       {
@@ -4139,7 +4135,6 @@ public class AuditService {
 
 With \`REQUIRED\` instead of \`REQUIRES_NEW\` on \`auditService.log()\`, the audit entry would roll back along with the outer transaction whenever \`sendCancellationEmail\` throws — leaving a gap in your audit trail.`,
         followUps: [
-          { text: "Explain `REQUIRED`, `REQUIRES_NEW`, and `NESTED` with scenarios." },
           { text: "What happens with `NOT_SUPPORTED` and `MANDATORY`?" },
           { text: "What can go wrong with `REQUIRES_NEW` when the connection pool is small?" },
         ],
@@ -4187,7 +4182,7 @@ public void checkAndCharge(Long id) { ... } // READ 1 == READ 2, guaranteed
 **Production advice:** Don't change isolation level speculatively. Understand your exact consistency requirement, prove READ_COMMITTED is insufficient, then raise it. Every level above READ_COMMITTED trades throughput for correctness.`,
         followUps: [
           { text: "Explain dirty read, non-repeatable read, and phantom read." },
-          { text: "What is Spring/DB default isolation for most apps?" },
+          { text: "Does Spring choose an isolation level for you?" },
           { text: "How do you set isolation on `@Transactional`?" },
         ],
       },
@@ -4224,8 +4219,8 @@ spring.jpa.hibernate.ddl-auto=update
 spring.jpa.hibernate.ddl-auto=validate
 \`\`\``,
         followUps: [
-          { text: "Why prefer migrations over `ddl-auto=update` in production?" },
-          { text: "How does Flyway version and checksum migration files?" },
+          { text: "What does `ddl-auto=update` do when you rename a field?" },
+          { text: "Someone edited a migration that already ran and the app won't start. What now?" },
           { text: "How do you handle a failed migration in a shared environment?" },
         ],
       },
@@ -4306,7 +4301,7 @@ public class Application { ... }
 
 **The cross-store consistency trap:** if you write to Postgres and Mongo in the same operation and Mongo write fails, you've got partial state. No distributed transaction covers both. Solve it with the Outbox pattern or accept eventual consistency explicitly.`,
         followUps: [
-          { text: "When is MongoDB a better fit than PostgreSQL?" },
+          { text: "Variable schema is the usual reason to reach for Mongo — does `JSONB` settle it?" },
           { text: "How do transactions differ in document stores vs relational DBs?" },
           { text: "Can you use both SQL and NoSQL in one Spring Boot system?" },
         ],
@@ -4349,7 +4344,7 @@ WHERE created_at > '2024-01-01' -- skips both
 
 **Too many indexes trap:** a table with 10 indexes means every INSERT triggers 10 B-tree updates. On a write-heavy \`orders\` table (high insert rate), this serializes writes and tanks throughput. Use \`pg_stat_user_indexes\` in PostgreSQL to find indexes with \`idx_scan = 0\` (never used) and drop them.`,
         followUps: [
-          { text: "What is the trade-off of too many indexes on write-heavy tables?" },
+          { text: "Which indexes should you drop?" },
           { text: "What is a composite index, and does column order matter?" },
           { text: "How would you find out that a slow query is missing an index?" },
         ],
@@ -4392,7 +4387,7 @@ SELECT u.name, o.total FROM users u, orders o;
 
 **JPA connection:** \`JOIN FETCH\` in JPQL maps to SQL INNER JOIN; \`LEFT JOIN FETCH\` maps to LEFT OUTER JOIN and is necessary when the association can be \`null\` (optional \`@ManyToOne\`) — INNER JOIN would silently drop entities with a null FK.`,
         followUps: [
-          { text: "When would a LEFT JOIN return nulls for the right side?" },
+          { text: "Why does a `WHERE` on the right-hand table turn a LEFT JOIN into an INNER JOIN?" },
           { text: "How do joins relate to JPA association fetching?" },
           { text: "What is a CROSS JOIN, and when is it accidental/bad?" },
         ],
