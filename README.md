@@ -4,7 +4,7 @@ Java and Spring Boot interview questions for a candidate with ~2 years of
 experience. The answers are written to be **said out loud in a room**, not read
 off a page.
 
-**158 questions, 414 follow-ups, 12 categories.** Static Astro site, no backend.
+**158 questions, 413 follow-ups, 12 categories.** Static Astro site, no backend.
 
 ## The format
 
@@ -33,7 +33,7 @@ Code uses real names — `OrderService`, `PaymentGateway`, `UserDto` — never `
 | Spring Data JPA / Hibernate | 19 | 52 |
 | Security | 10 | 27 |
 | Microservices | 12 | 33 |
-| Testing | 8 | 24 |
+| Testing | 8 | 23 |
 | Build Tools, Git & DevOps | 10 | 30 |
 | System Design / Scenarios | 10 | 30 |
 | Behavioral / Project-Based | 6 | 18 |
