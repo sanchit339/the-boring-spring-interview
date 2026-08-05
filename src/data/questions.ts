@@ -4903,7 +4903,7 @@ Read those last two numbers together and you have the interview answer: a **hard
 In practice, be ready to say that **you'd probably not run Eureka on Kubernetes**. The platform already tracks pod readiness, so \`http://inventory-service:8080\` resolves through cluster DNS with endpoints updated in seconds by the readiness probe, and running a registry on top duplicates the job with worse propagation and one more stateful component to operate. Eureka still earns its place on VMs, on ECS without service discovery, or in a hybrid estate.`,
         followUps: [
           { text: "What is the difference between client-side and server-side discovery?" },
-          { text: "How does a service register and renew its lease?" },
+          { text: "How long can a dead instance keep receiving traffic?" },
           { text: "What would you use instead of Eureka on Kubernetes, and why?" },
         ],
       },
@@ -4954,7 +4954,6 @@ The split that gets you marks: the gateway does the **coarse** security pass —
 
 Its two real risks are worth naming unprompted. It's a **single point of failure on the hot path**, so run at least two stateless instances and keep per-route timeouts tight. And it's an **organizational bottleneck** if every new endpoint needs a hand-edited route in a repo one team owns — prefer discovery-based routing so teams self-serve. On Kubernetes, plain routing is often better served by an **Ingress or Gateway API** resource, and you keep Spring Cloud Gateway for the cases that need real request logic.`,
         followUps: [
-          { text: "What belongs in the gateway, and what should stay in the services?" },
           { text: "How does Spring Cloud Gateway differ from Zuul?" },
           { text: "What are the risks of a gateway becoming a bottleneck?" },
         ],
@@ -4999,7 +4998,7 @@ The projects worth naming: **Gateway** (edge routing), **Config** (Git-backed ex
 Say the Kubernetes part unprompted, because it's what separates a current answer from a 2018 one. Kubernetes absorbed the **platform** concerns: Services and cluster DNS instead of Eureka, kube-proxy instead of Ribbon, Ingress instead of a gateway for plain routing, ConfigMaps and Secrets instead of a Config Server, and probes instead of registry heartbeats. What it can't do is **in-process behaviour** — a circuit breaker, a fallback, a retry with jitter, a bulkhead around one specific downstream call — so **Resilience4j and Micrometer Tracing stay** while much of the rest is optional. A modern Boot 3 service on Kubernetes often uses Spring Cloud for exactly two things: resilience and declarative clients.`,
         followUps: [
           { text: "Which Spring Cloud projects would you actually reach for today?" },
-          { text: "How does Spring Cloud relate to Netflix OSS historically?" },
+          { text: "Is any Netflix component still alive in Spring Cloud?" },
           { text: "What has Kubernetes replaced in modern Spring Cloud setups?" },
         ],
       },
@@ -5041,7 +5040,7 @@ That \`outbox\` line is the detail that shows you've done this: writing to the d
 
 Whatever you pick synchronously, set **connect and read timeouts explicitly** — \`RestTemplate\` and \`RestClient\` ship with none — and keep the caller's budget larger than the callee's so timeouts nest. Retries only on **idempotent** operations, with exponential backoff and jitter, behind a circuit breaker; three blind retries against a struggling service triple its load exactly when it can least cope.`,
         followUps: [
-          { text: "When would you choose async messaging over synchronous REST?" },
+          { text: "What does going async actually cost you?" },
           { text: "What are the trade-offs of gRPC vs JSON REST?" },
           { text: "How do timeouts and retries affect cascading failures?" },
         ],
@@ -5098,7 +5097,7 @@ Where Feign sits against the alternatives: **Feign** when the call is a plain ty
 
 Two traps worth mentioning unprompted: a \`@FeignClient\` interface **isn't a controller**, so don't put \`@RequestMapping\` on the type expecting Spring to serve it; and by default Feign **doesn't forward headers**, so the caller's \`Authorization\` and trace headers vanish unless you add a \`RequestInterceptor\`.`,
         followUps: [
-          { text: "How does OpenFeign integrate with load balancing and service discovery?" },
+          { text: "Feign resolves through discovery — does that make the call reliable?" },
           { text: "How do you configure timeouts and error decoding?" },
           { text: "What is the difference between Feign and WebClient/RestClient?" },
         ],
@@ -5148,7 +5147,7 @@ Know when **not** to fall back. Returning \`PaymentStatus.SUCCESS\` because the 
 On the Hystrix comparison: Netflix stopped developing it in 2018 and Spring Cloud removed it, so naming it as a current choice is a red flag. Resilience4j is lighter (no Archaius or RxJava), runs on the **caller's thread with a semaphore bulkhead** by default rather than a thread pool per dependency, and ships retry, rate limiter, bulkhead, and time limiter as separate composable modules. Breaker state transitions publish Micrometer metrics and an Actuator endpoint, so **alert on the breaker opening** — it's usually the earliest signal that a downstream is dying.`,
         followUps: [
           { text: "What happens to the very first request after the circuit has been open for a while?" },
-          { text: "How does Resilience4j compare to Netflix Hystrix?" },
+          { text: "Why doesn't Resilience4j need a thread pool per dependency?" },
           { text: "How do fallback methods help degrade gracefully?" },
         ],
       },
@@ -5202,7 +5201,6 @@ Secrets are where teams get this wrong. The whole value of a Git-backed repo is 
 
 Be ready for the Kubernetes version of the question: **ConfigMaps and Secrets** mounted as env vars or files cover non-sensitive config with no extra component to operate, and Spring Boot reads them like any other property source. A Config Server still earns its place when you want config **versioned in Git with review**, shared across clusters or non-Kubernetes workloads, or changeable without a pod restart.`,
         followUps: [
-          { text: "How does a config server with a Git backend work?" },
           { text: "What actually happens to a bean when a config refresh fires?" },
           { text: "What secrets management approaches pair with config servers?" },
         ],
@@ -5256,7 +5254,7 @@ Why not 2PC: it holds locks across a network round trip, so throughput collapses
 Two production details. **Persist saga state** — an in-memory orchestrator that dies mid-flow leaves an order permanently half-processed, so the state machine goes in a table and a scheduled job resumes or compensates anything stuck. And some steps have **no real undo**: you can't un-send an email, so you send a cancellation, and you order the saga so the irreversible step goes **last**.`,
         followUps: [
           { text: "What is the difference between choreography and orchestration sagas?" },
-          { text: "How do compensating transactions work?" },
+          { text: "What has to be true of a compensation for the saga to be safe?" },
           { text: "Why is 2PC often avoided in microservices?" },
         ],
       },
@@ -5301,7 +5299,7 @@ Know the three pillars and what each is for. **Logs** are discrete events with f
 In production, log JSON via \`logstash-logback-encoder\`, write to **stdout** and let the platform's agent ship it, and never log tokens, passwords, or card numbers — centralized logging means one leaked field is now indexed and searchable by everyone with dashboard access.`,
         followUps: [
           { text: "What is a correlation/trace ID, and how is it propagated?" },
-          { text: "How does Micrometer Tracing relate to Sleuth in modern Boot?" },
+          { text: "You're upgrading a Boot 2 app with Sleuth to Boot 3. What changes?" },
           { text: "What is the difference between logs, metrics, and traces?" },
         ],
       },
@@ -5353,8 +5351,8 @@ On delivery guarantees, the answer interviewers want: **at-least-once is the def
 
 **Spring Cloud Stream** goes one abstraction higher: declare \`@Bean Function<OrderPlaced, Invoice>\` and bind it to Kafka or RabbitMQ in properties, so switching brokers is a dependency swap. Useful when you're genuinely broker-agnostic, an unnecessary layer when you're not.`,
         followUps: [
-          { text: "When would you pick Kafka over RabbitMQ?" },
-          { text: "How does Spring for Apache Kafka / Spring AMQP abstract producers and consumers?" },
+          { text: "A new team wants to consume events from six months ago. Which broker survives that?" },
+          { text: "What does the listener container do for you beyond calling your method?" },
           { text: "What is at-least-once vs exactly-once delivery?" },
         ],
       },
@@ -5401,8 +5399,7 @@ Design the operation to help you where you can. \`PUT /orders/{clientOrderId}\` 
 
 The same rule governs consumers. Kafka and RabbitMQ are **at-least-once**, so a listener will see the same event twice after a redelivery — dedupe on the event id before acting, or you'll email a customer twice about one order. And where an operation genuinely can't be made idempotent, don't paper over it with retries: **surface the uncertainty** for a reconciliation job or a human, which is exactly what payment providers do when a charge is left in an unknown state.`,
         followUps: [
-          { text: "How do you make a payment or order API idempotent?" },
-          { text: "What is an idempotency key, and where is it stored?" },
+          { text: "Can you keep idempotency keys in Redis?" },
           { text: "How do retries interact with non-idempotent operations?" },
         ],
       },
