@@ -6219,9 +6219,9 @@ public ResponseEntity<Void> redirect(@PathVariable String code) {
 
 **Custom aliases and expiry** are small additions: an alias is just a user-supplied \`code\` that has to pass the unique constraint, so let the database arbitrate and return **409** on violation rather than checking first, which races. Expiry is a nullable \`expires_at\` checked on read, plus a nightly job deleting old rows — check on read regardless, since a cached entry can outlive its own expiry.`,
         followUps: [
-          { text: "How do you generate unique short codes at scale (hash vs base62 counter)?" },
+          { text: "Sequential ids make codes guessable. Does that matter?" },
           { text: "How would you handle custom aliases and expiration?" },
-          { text: "What is the read/write ratio, and how does that affect caching?" },
+          { text: "Why is a URL shortener unusually easy to cache?" },
         ],
       },
       {
@@ -6261,7 +6261,7 @@ public boolean tryConsume(String apiKey) {
 
 **Gateway, service, or both — both, for different reasons.** The **gateway** does the coarse per-client limit and keeps junk traffic off your fleet entirely. **Individual services** protect specific expensive endpoints — a report that runs a 30-second query needs its own much lower limit than a cache-backed lookup. Rate limiting only at the service means the traffic already cost you a network hop and a thread; only at the gateway means one expensive endpoint can still be hammered inside your limit.`,
         followUps: [
-          { text: "Compare token bucket, leaky bucket, and fixed window algorithms." },
+          { text: "What's wrong with counting requests per calendar minute?" },
           { text: "How would you implement rate limiting with Redis in Spring?" },
           { text: "Should rate limiting live in the gateway, service, or both?" },
         ],
@@ -6307,7 +6307,6 @@ server:
 
 **Reporting progress and failures** is what makes 202 usable. The job id addresses a status resource returning \`PENDING\`, \`RUNNING\`, \`COMPLETED\`, or \`FAILED\` with an error message and, for a row-oriented import, a per-row error report. Polling every few seconds is fine and far simpler than WebSockets; use Server-Sent Events only if the UX genuinely needs live progress. Make the worker **idempotent on job id** so a redelivered queue message doesn't import the same file twice.`,
         followUps: [
-          { text: "Would you use async processing, streaming, or object storage direct upload?" },
           { text: "How do you report progress and failures to the client?" },
           { text: "What timeouts and size limits would you configure?" },
         ],
@@ -6339,8 +6338,8 @@ public void on(OrderPlaced event) {
 
 **Templating at scale** means the template lives outside the code — in the database or object storage — so marketing can change copy without a deploy, with a rendering engine like Thymeleaf or Handlebars applied per **locale**. Pass the template a small explicit context object rather than your domain entity, or you'll leak internal fields into an email. Version the templates so a send record can say which version produced it, and keep a preview endpoint, because a broken template discovered in production is a broken template that already reached customers.`,
         followUps: [
-          { text: "How do you ensure delivery retries without spamming users?" },
-          { text: "What role do message queues play in this design?" },
+          { text: "Which delivery failures should you not retry?" },
+          { text: "Beyond not blocking checkout, what does the queue buy you?" },
           { text: "How do you template and personalize notifications at scale?" },
         ],
       },
@@ -6388,7 +6387,7 @@ spring:
 
 **Cache stampede** is what happens when a hot key expires and a hundred concurrent requests all miss simultaneously, all hitting the database with the identical query — the load spike arrives exactly when the cache stops protecting you. Mitigate by **staggering TTLs with jitter** so keys don't expire together, and for genuinely hot keys by letting only one caller recompute while the others briefly serve the stale value or wait on a short lock. Caffeine's \`refreshAfterWrite\` does this by refreshing asynchronously while continuing to serve the old value.`,
         followUps: [
-          { text: "What is the difference between `@Cacheable`, `@CachePut`, and `@CacheEvict`?" },
+          { text: "What happens if you put `@Cacheable` on an update method?" },
           { text: "How do you choose TTLs and cache keys?" },
           { text: "What is cache stampede, and how do you mitigate it?" },
         ],
@@ -6419,8 +6418,8 @@ spring:
 **The order bottlenecks actually appear in.** First the **database** — missing indexes and N+1 queries, which no amount of scaling fixes. Then the **connection pool**, where requests queue for a connection and latency climbs while CPU sits idle; that symptom pair is diagnostic. Then **external API calls** without timeouts, where one slow downstream parks every request thread. **GC pressure** and CPU come last for a typical CRUD service, and heap tuning is usually the least valuable place to start despite being the most tempting. Check them in that order and you'll fix the real problem far sooner.`,
         followUps: [
           { text: "What is the difference between vertical and horizontal scaling?" },
-          { text: "How do stateless services + load balancers enable scale-out?" },
-          { text: "What bottlenecks appear first (DB, pool, GC, external APIs)?" },
+          { text: "If the service is stateless, where does the state actually go?" },
+          { text: "Scaling out took the database down. How?" },
         ],
       },
       {
@@ -6449,8 +6448,8 @@ jcmd 1 Thread.print > /tmp/threads.txt     # or /actuator/threaddump if exposed
 
 **Profiling a live JVM safely.** \`jcmd\` thread dumps are cheap and safe. **Java Flight Recorder** is designed for production, typically under 2% overhead — \`jcmd 1 JFR.start duration=60s filename=/tmp/rec.jfr\` gives you allocation, lock, and CPU profiles you open later in JDK Mission Control. What you don't do is attach a sampling profiler with high overhead, enable DEBUG logging fleet-wide, or take a **heap dump** on a large heap, since that pauses the JVM for seconds and writes gigabytes. If you need a heap dump, take it from **one pod pulled out of the load balancer**, which is exactly what readiness probes let you do.`,
         followUps: [
-          { text: "What metrics and logs would you check first?" },
-          { text: "How do distributed traces help isolate the slow hop?" },
+          { text: "Latency is up and CPU is flat. What does that tell you?" },
+          { text: "What does a trace show that per-service metrics can't?" },
           { text: "How would you safely profile or thread-dump a live JVM?" },
         ],
       },
@@ -6495,8 +6494,7 @@ public void relay() {
 **When a saga beats 2PC.** Effectively always across services. 2PC holds locks through a network round trip so throughput collapses under contention, the coordinator is a single point of failure that can leave participants stuck in-doubt, and it needs XA support from every participant — which rules out Kafka, REST APIs, Stripe, and most NoSQL. A saga keeps each transaction **local, short, and independently committable**, paying for it with visible intermediate states and compensating transactions you have to write yourself. Inside one service and one database, a plain \`@Transactional\` is still the right answer — don't reach for a saga where a transaction works.`,
         followUps: [
           { text: "What consistency models exist (strong, eventual)?" },
-          { text: "How do outbox pattern and idempotent consumers help?" },
-          { text: "When is a saga preferable to a distributed transaction?" },
+          { text: "Is there ever a case for 2PC?" },
         ],
       },
       {
@@ -6540,8 +6538,8 @@ public class OrderService {
 **When to use a queue instead.** \`@Async\` state lives in your JVM's heap, so a restart, a deploy, or an OOM **loses every queued task with no record it existed**. That's fine for a cache warm-up and unacceptable for a payment confirmation. Use a broker when the work must survive a crash, needs retries with backoff and a dead-letter queue, should be spread across instances, or has to be observable. \`@Async\` is right for short, cheap, best-effort work inside one process — nothing more.`,
         followUps: [
           { text: "How do you configure the executor for `@Async` methods?" },
-          { text: "What are the limitations of `@Async` (proxy, return types, error handling)?" },
-          { text: "When should you use a message queue instead of `@Async`?" },
+          { text: "Your `@Async` method threw and nothing appeared in the logs. Why?" },
+          { text: "What does a broker give you that a thread pool can't?" },
         ],
       },
       {
@@ -6583,9 +6581,9 @@ spring:
 
 **Multi-instance is where naive scheduling breaks.** Three replicas means three executions of the same cron — three invoice runs, three sets of emails. **ShedLock** is the light answer: it takes a row-level lock in your existing database or Redis, and only the winner executes. **Quartz** in clustered mode is the heavier one, and it earns its place when you need persistent job state, misfire handling, or dynamic scheduling at runtime. For anything genuinely important, the strongest option is to take it out of the app entirely — a **Kubernetes CronJob** running a separate pod gives you isolation, its own resource limits, retries, and a run history you can inspect, none of which \`@Scheduled\` provides.`,
         followUps: [
-          { text: "What is the difference between fixedRate, fixedDelay, and cron?" },
+          { text: "Your nightly job shifts by an hour twice a year. Why?" },
           { text: "How do you prevent overlapping executions of the same job?" },
-          { text: "How would you run scheduled jobs in a multi-instance deployment (ShedLock)?" },
+          { text: "When is ShedLock not enough?" },
         ],
       },
     ],
@@ -6661,7 +6659,7 @@ RESULT      "Moved the external call outside the transaction, p99 back to 320ms.
 **On prevention**, keep it proportionate and concrete: the alert that would have caught it 20 minutes earlier, the regression test, the timeout that was missing. Avoid grand process proposals — "we introduced a full incident review process" from one bug sounds invented. One specific, well-chosen change is more convincing than a policy.`,
         followUps: [
           { text: "What tools and signals led you to the root cause?" },
-          { text: "How did you mitigate impact while investigating?" },
+          { text: "Who did you tell, and when?" },
           { text: "What process changes did you introduce to prevent recurrence?" },
         ],
       },
@@ -6690,7 +6688,7 @@ Order matters — read for these in sequence, not all at once:
 **Handling disagreement.** State the concern once with a reason, and hear the response properly — the author has usually thought about it and may know a constraint you don't. If it's genuinely important and you still disagree, take it out of the comment thread to a call, because text makes technical disagreement feel more adversarial than it is. Escalate to a third person on the team when you're deadlocked, which is normal rather than a failure. The thing to avoid is a review thread with fifteen replies: past two or three exchanges, the medium has stopped working. And be willing to be wrong out loud — "fair enough, you're right about the ordering" is cheap and builds a lot of trust.`,
         followUps: [
           { text: "How do you give constructive feedback without blocking the team?" },
-          { text: "What correctness, security, and readability checks do you prioritize?" },
+          { text: "What do you look for that most reviewers miss?" },
           { text: "How do you handle disagreements in review?" },
         ],
       },
@@ -6749,7 +6747,6 @@ Spring Cloud    Ribbon/Hystrix/Zuul gone; Sleuth -> Micrometer Tracing (Boot 3)
 
 **On evaluating a major upgrade at work**, the credible answer is procedural rather than heroic. Read the migration guide and the deprecations first. Do it in a branch and let the test suite tell you what broke — which is the real argument for having one. Go **one major version at a time** (2.7 → 3.0 → 3.1, not 2.5 → 3.2), since the guides are written pairwise. Check that your dependencies support the target before starting, because a library that never made the Jakarta namespace move is a blocker no amount of your own effort fixes. And time it deliberately: the strongest reason to upgrade is usually **end of security support** for your current version, which turns it from a nice-to-have into a date on the calendar.`,
         followUps: [
-          { text: "What resources do you follow (docs, blogs, release notes)?" },
           { text: "Have you adopted a recent Java or Spring feature in a project?" },
           { text: "How do you evaluate whether to upgrade major versions at work?" },
         ],
