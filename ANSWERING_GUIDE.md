@@ -188,7 +188,7 @@ is correct as-is.
 
 ## 6. Current coverage
 
-158 questions, 439 followups, **439 answered / 0 missing** — all 12 categories complete.
+158 questions, 425 followups, **425 answered / 0 missing** — all 12 categories complete.
 
 Followup count is **at most 3, not exactly 3**. Prune rather than pad — see
 `answer_rules.md` Rule 7. Ten `core-java`, three `oop` and nine `spring-core`
@@ -196,13 +196,18 @@ questions carry two, because the third restated the main answer or was trivia.
 `spring-core` needed the most pruning precisely because its main answers are the
 most complete: the richer the answer, the less room a third followup has.
 
+**A category sitting at exactly 3 everywhere hasn't been swept yet.**
+`spring-mvc-rest` was 45/45 — three per question across all fifteen — and 14 of
+those restated their parent, some almost word for word. The uniform count is
+itself the signal; check it before reading a single answer.
+
 | Category | Range | Qs | main answer | explanation | followup answers |
 |---|---|---|---|---|---|
 | `core-java` | Q1–Q28 | 28 | 28/28 | 28/28 | 74/74 |
 | `oop` | Q29–Q35 | 7 | 7/7 | 7/7 | 18/18 |
 | `spring-core` | Q36–Q52 | 17 | 17/17 | 17/17 | 42/42 |
 | `spring-boot` | Q53–Q68 | 16 | 16/16 | 16/16 | 35/35 |
-| `spring-mvc-rest` | Q69–Q83 | 15 | 15/15 | 15/15 | 45/45 |
+| `spring-mvc-rest` | Q69–Q83 | 15 | 15/15 | 15/15 | 31/31 |
 | `spring-data-jpa` | Q84–Q102 | 19 | 19/19 | 19/19 | 57/57 |
 | `security` | Q103–Q112 | 10 | 10/10 | 10/10 | 30/30 |
 | `microservices` | Q113–Q124 | 12 | 12/12 | 12/12 | 36/36 |
@@ -383,10 +388,14 @@ Beyond `answer_rules.md`:
 
 ### The `answer` field is spoken, not read
 
-The rules live in **`answer_rules.md` Rule 2** — sayable (~30-word sentence cap,
-opening definition kept whole), learnable (anchor to a number, a failure mode, or
-a named thing), and no LARPing or interview meta-commentary. Read it before
-writing; what follows is just how to *check* the result.
+The rules live in **`answer_rules.md` Rule 2** — shaped (2–4 paragraphs split on
+the beats, not one block of prose), sayable (~30-word sentence cap, opening
+definition kept whole), learnable (anchor to a number, a failure mode, or a named
+thing), and no LARPing or interview meta-commentary. Read it before writing; what
+follows is just how to *check* the result.
+
+`spring-boot` and `spring-mvc-rest` are the reference for the paragraph shape.
+Categories written before it are still single-block and want the same pass.
 
 The sentence cap is the only part a script can catch. Split on sentence
 boundaries and flag anything over 30 words, ignoring the first:

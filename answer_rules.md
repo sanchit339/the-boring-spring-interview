@@ -29,6 +29,18 @@ definition. Every rule below follows from that.
 - No bullet points. No headers. Prose only.
 - Never say "In conclusion" or "It's important to note"
 
+### Shaped on the page
+
+An answer that is three beats long should look like three beats. Put a blank
+line (`\n\n`, which the renderer turns into a `<p>`) between them — typically
+what the thing is, then the mechanism or key rule, then what breaks if you get
+it wrong. Same words, three paragraphs; a wall of prose hides the structure the
+candidate is supposed to learn.
+
+Two to four paragraphs is the working range. Don't break every sentence out on
+its own — that's a bulleted list wearing paragraph clothes, and Rule 2 already
+says no bullets.
+
 ### Sayable
 
 - **Cap sentences at roughly 30 words.** A sentence carrying a colon plus a
